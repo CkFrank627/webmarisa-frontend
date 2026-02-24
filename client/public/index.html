@@ -1,15 +1,60 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <link rel="icon" href="<%= BASE_URL %>favicon.ico">
-    <title>白絲魔理沙 -連線中-</title>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+
+    <!-- viewport -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+    <!-- basic SEO -->
+    <title>白丝魔理沙 - 正在连接 -</title>
+    <meta
+      name="description"
+      content="对已经停服的版本的还原，基于 LLM + 轻量记忆的互动聊天机器人。支持标准版 / 经典版 / 自设版人格与 teach 教学模式。"
+    />
+    <meta name="robots" content="index,follow" />
+    <meta name="theme-color" content="#f6f2e7" />
+
+    <!-- favicon -->
+    <link rel="icon" href="<%= BASE_URL %>favicon.ico" />
+
+    <!-- Open Graph (social preview) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="白丝魔理沙" />
+    <meta property="og:title" content="白丝魔理沙" />
+    <meta
+      property="og:description"
+      content="对已经停服的版本的还原，基于 LLM + 轻量记忆的互动聊天机器人。支持标准/经典/自设版与 teach 教学模式。"
+    />
+    <meta property="og:url" content="https://webmarisa.com/" />
+    <meta property="og:image" content="https://webmarisa.com/marisa_idle.jpg" />
+    <meta property="og:image:secure_url" content="https://webmarisa.com/marisa_idle.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="白丝魔理沙" />
+    <meta
+      name="twitter:description"
+      content="对已经停服的版本的还原，基于 LLM + 轻量记忆的互动聊天机器人。支持标准/经典/自设版与 teach 教学模式。"
+    />
+    <meta name="twitter:image" content="https://webmarisa.com/marisa_idle.jpg" />
   </head>
+
   <body>
     <noscript>
-      <strong>We're sorry but neeee doesn't work properly without JavaScript enabled. Please enable it to continue.</strong>
+      <div style="max-width:720px;margin:24px auto;padding:16px;font-family:sans-serif;">
+        <h1 style="margin:0 0 10px;">白丝魔理沙</h1>
+        <p style="margin:0 0 10px;line-height:1.6;">
+          对已经停服的版本的还原，基于 LLM + 轻量记忆的互动聊天机器人。支持标准版 / 经典版 / 自设版人格，并提供 teach 教学模式。
+        </p>
+        <p style="margin:0;color:#666;">
+          该页面需要启用 JavaScript 才能正常使用。
+        </p>
+      </div>
     </noscript>
+
     <div id="app"></div>
     <!-- built files will be auto injected -->
   </body>

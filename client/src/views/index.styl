@@ -1,124 +1,172 @@
 @import '~@/assets/css/variable'
 
+/* 整体容器：全屏 + 背景（可被 rootStyle 的 backgroundImage 覆盖） */
 .chatroom
-  position: absolute
-  top: 50%
-  left: 50%
-  transform: translate(-50%, -50%)
-  width: 712px
-  height: 512px
-  background: $box-color
-  border: 1px solid $border-color
+  position fixed
+  inset 0
+  width 100%
+  height 100vh
+  border none
+  overflow hidden
+  display flex
+  align-items center
+  justify-content center
+  background $box-color
 
+  /* 背景遮罩：提升可读性（可选） */
+  &:before
+    content ''
+    position absolute
+    inset 0
+    background rgba(246,242,231,.70)
+    pointer-events none
+
+/* 主内容容器：放在遮罩上面 */
 .container
-  display: flex
-  justify-content: space-between
-  margin: 0 auto
-  margin-top: 6px
-  width: 700px
-  height: 502px
+  position relative
+  z-index 1
+  display flex
+  justify-content space-between
+  gap 10px
+  margin 0 auto
+  margin-top 6px
+  width 1208px
+  height 502px
 
+/* 左侧人格栏（在 chatroom.vue 里 class=persona-panel） */
+.persona-panel
+  width 220px
+  height 502px
+
+/* ✅ 给 talk-slot 占位（即使 talk-panel 变成 fixed 浮层，也不挤布局） */
+.talk-slot
+  width 700px
+  height 500px
+  position relative
+
+/* 中间聊天区域 */
 .talk-panel
-  width: 470px
-  height: 500px
-  background: $container-color
-  border: 1px solid $border-color
-  span
-    display: block
-    width: 100%
-    height: 40px
-    background: $title-color
-    border-bottom: 1px solid $border-color
-    font-size: 14px
-    line-height: 40px
-    text-indent: 9px
-    color: $order-blue
-  .talk-place
-    width: clac(100% - 10px)
-    height: 420px
-    padding-left: 10px
-    overflow-y: scroll
-    .talk_entry
-      width: 100%
-      font-size: 14px
-      margin-top: 12px
-      word-break: break-all
-      line-height: 25px
-      .talk_item
-        display: inline
-        background: transparent
-        border: none
-        line-height: 0
-  .speak
-    width: 100%
-    height: 39px
-    input
-      background: none
-      outline: 0
-      border: none
-    & input[name='you']
-      position: relative
-      top: 10px
-      left: 5px
-      width: 382px
-      height: 24px
-      padding-left: 5px
-      background: rgba(255, 255, 255, 0.2)
-      border: 1px solid $border-color
-      transition: all 0.2s
-      &:hover, &:focus
-        background: rgba(255, 255, 255, 0.6)
-        border-radius: 5px
-    & input[type='submit']
-      position: relative
-      top: 9px
-      left: 15px
-      width: 48px
-      height: 22px
-      background: rgba(255, 255, 255, 0.2)
-      border: 1px solid $border-color
-      border-radius: 5px
-      font-size: 12px
-      transition: all 0.2s
+  width 700px
+  height 500px
+  background $container-color
+  border 1px solid $border-color
+  display flex
+  flex-direction column
 
+  .topbar
+    flex 0 0 auto
+
+  .ui-panel
+    flex 0 0 auto
+
+  .talk-place
+    flex 1 1 auto
+    min-height 0
+    width calc(100% - 10px)
+    padding-left 10px
+    overflow-y auto
+
+    .talk_entry
+      width 100%
+      font-size 14px
+      margin-top 12px
+      word-break break-all
+      line-height 25px
+
+      .talk_item
+        display inline
+        background transparent
+        border none
+
+  .speak
+    flex 0 0 auto
+    height 48px
+    display flex
+    align-items center
+    gap 10px
+    padding 8px
+    border-top 1px solid $border-color
+
+    input
+      background none
+      outline 0
+      border none
+
+    input[name='you']
+      flex 1
+      height 30px
+      padding-left 10px
+      background rgba(255, 255, 255, 0.6)
+      border 1px solid $border-color
+      border-radius 8px
+
+    input[type='submit']
+      width 72px
+      height 30px
+      background rgba(255, 255, 255, 0.6)
+      border 1px solid $border-color
+      border-radius 8px
+      font-size 12px
+
+/* 右侧 profile 区 */
 .profile
-  width: 220px
-  height: 502px
+  width 250px
+  height 502px
+
   .avatar
-    width: 218px
-    height: 250px
-    border: 1px solid $border-color
-    background-image: url('./img/marisa.jpg')
-    background-size: 333px
-    background-repeat: no-repeat
-    background-position: 58% 2%
-    margin-bottom: 8px
+    width 248px
+    height 250px
+    border 1px solid $border-color
+    background-size 333px
+    background-repeat no-repeat
+    background-position 58% 2%
+    margin-bottom 8px
+
   .cmd
-    width: 202px
-    height: 232px
-    padding: 4px 8px
-    background: $container-color
-    border: 1px solid $border-color
-    color: $order-blue
-    font-size: 12px
-    .system-cmd
-      display: block
-      width: 100%
-      margin-bottom: 13px
-      margin-top: 13px
-    .cmd-collect
-      text-indent: 1em
-    .marisa-cmd
-      display: inline
-      font-weight: bold
-    .cmd_desc
-      position: relative
-      top: -2px
-      line-height: 15px
-      .cmd_desc_content
-        margin-top: 10px
-        line-height: 15px
+    width 232px
+    height 232px
+    padding 4px 8px
+    background $container-color
+    border 1px solid $border-color
+    color $order-blue
+    font-size 12px
 
 .you_color
-  // color: #836FFF !important
-  color: #4876FF !important
+  color #4876FF !important
+
+@media (max-width: 900px)
+  .chatroom
+    position relative
+    inset auto
+    width 100%
+    height auto
+    min-height 100vh
+    display block
+
+    &:before
+      display none
+
+  .container
+    width 100%
+    height auto
+    flex-direction column
+    gap 10px
+
+  .persona-panel
+    width 100%
+    height auto
+    max-height 240px
+    overflow-y auto
+
+  .talk-slot
+    width 100%
+    height auto
+
+  .talk-panel
+    width 100%
+    height auto
+    min-height 60vh
+
+  .profile
+    width 100%
+    height auto

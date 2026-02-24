@@ -1,0 +1,7 @@
+[
+  { "key": "plain",  "label": "纯色", "url": "" },
+  { "key": "daily1", "label": "日常 1", "url": "/bg/daily1.jpg" },
+  { "key": "daily2", "label": "日常 2", "url": "/bg/daily2.jpg" },
+  { "key": "xmas",   "label": "圣诞",  "url": "/bg/xmas.jpg" },
+  { "key": "cnny",   "label": "新年",  "url": "/bg/bg_CNNY.png" }
+]

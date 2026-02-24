@@ -18,7 +18,14 @@ module.exports = {
     port: 8888, // 可选
     https: false,
     hotOnly: false,
-    proxy: null
+    proxy: {
+  '^/Add': { target: 'http://localhost:3000', changeOrigin: true },
+  '^/Reply': { target: 'http://localhost:3000', changeOrigin: true },
+  '^/Forget': { target: 'http://localhost:3000', changeOrigin: true },
+  '^/Status': { target: 'http://localhost:3000', changeOrigin: true },
+  '^/marisa': { target: 'http://localhost:3000', changeOrigin: true } // 如果你也挂了 /marisa/xxx
+}
+
   },
   productionSourceMap: process.env.NODE_ENV === 'production' ? false : true,
   chainWebpack: webpackConfig => {
