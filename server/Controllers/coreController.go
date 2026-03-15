@@ -3,6 +3,7 @@ package Controllers
 import (
 	"fmt"
 	"github.com/kataras/iris"
+	"net"
 	"net/http"
 	"server/Models"
 	"server/Services"
@@ -14,10 +15,18 @@ func Add(ctx iris.Context, service Services.IMemoriseService) ModelAndView {
 	err := ctx.ReadForm(&memory)
 
 	if err != nil {
-		fmt.Println("Controller Add() error: %s", err)
+		fmt.Printf("Controller Add() error: %v\n", err)
 		return ModelAndView{
 			Code: http.StatusBadRequest,
 			Data: err.Error(),
+		}
+	}
+	if memory.Ip == "" {
+		host, _, splitErr := net.SplitHostPort(ctx.RemoteAddr())
+		if splitErr == nil {
+			memory.Ip = host
+		} else {
+			memory.Ip = ctx.RemoteAddr()
 		}
 	}
 	if data := service.Add(memory); data != nil {
@@ -37,7 +46,7 @@ func Reply(ctx iris.Context, service Services.IMemoriseService) ModelAndView {
 
 	err := ctx.ReadForm(&memory)
 	if err != nil {
-		fmt.Println("Controller Reply() error: %s", err)
+		fmt.Printf("Controller Reply() error: %v\n", err)
 		return ModelAndView{
 			Code: http.StatusBadRequest,
 			Data: err.Error(),
@@ -55,7 +64,7 @@ func Forget(ctx iris.Context, service Services.IMemoriseService) ModelAndView {
 
 	err := ctx.ReadForm(&memory)
 	if err != nil {
-		fmt.Println("Controller Forget() error: %s", err)
+		fmt.Printf("Controller Forget() error: %v\n", err)
 		return ModelAndView{
 			Code: http.StatusBadRequest,
 			Data: err.Error(),

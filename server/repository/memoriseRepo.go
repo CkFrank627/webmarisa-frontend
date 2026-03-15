@@ -13,7 +13,7 @@ import (
 
 type IMemoriseRepo interface {
 	// 插入记忆
-	AddMemory(data map[string]interface{}) bool
+	AddMemory(memory Models.Memorise) error
 	// 读取所有记忆
 	FetchAllMemory() (memorise []Models.Memorise)
 	// 读取一条记忆
@@ -31,15 +31,9 @@ type memoriseRepo struct {
 	source *gorm.DB
 }
 
-func (m *memoriseRepo) AddMemory(data map[string]interface{}) bool {
+func (m *memoriseRepo) AddMemory(memory Models.Memorise) error {
 	var db = m.source
-	memory := Models.Memorise{
-		Ip: data["ip"].(string),
-		Keyword: data["keyword"].(string),
-		Answer: data["answer"].(string),
-	}
-	db.Create(memory)
-	return true
+	return db.Create(memory).Error
 }
 
 func (m *memoriseRepo) FetchAllMemory() (memorise []Models.Memorise) {

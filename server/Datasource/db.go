@@ -60,10 +60,15 @@ func (m *MysqlConnectionPool) GetMysqlDB() (dbCon *gorm.DB) {
 }
 
 func ConnectDatabase(app *iris.Application) {
-	issue := GetInstace().InitDataPool()
-	if !issue {
-		log.Println("Inital database pool fail")
-		os.Exit(1)
-	}
-	app.Logger().Info("Connect Database success")
+    if os.Getenv("SKIP_MYSQL") == "1" {
+        app.Logger().Warn("SKIP_MYSQL=1, skip mysql connection")
+        return
+    }
+
+    issue := GetInstace().InitDataPool()
+    if !issue {
+        log.Println("Inital database pool fail")
+        os.Exit(1)
+    }
+    app.Logger().Info("Connect Database success")
 }
