@@ -46,7 +46,7 @@
 
       <!-- 中间：聊天区域 -->
 <!-- 中间：聊天区域 -->
-<div class="talk-slot">
+<div class="talk-slot" :style="talkSlotStyle">
 
   <!-- ✅ 拖拽判定区（拖拽时显示） -->
   <div class="dock-zones" v-if="dockEnabled && dragActive">
@@ -134,8 +134,23 @@
         </template>
 
         <button class="mini-btn" @click="uiOpen = !uiOpen">主题</button>
+        <button class="mini-btn" @click="bgPanelOpen = !bgPanelOpen">场景</button>
       </div>
     </div>
+
+    <!-- ✅ 场景/背景快速切换 -->
+<div v-if="bgPanelOpen" class="bg-panel">
+  <button
+    class="bg-jump"
+    v-for="it in bgPresets"
+    :key="it.key"
+    :class="{ on: bgKey === it.key }"
+    @click="setBgKey(it.key)"
+    :title="it.label || it.key"
+  >
+    前往{{ it.label || it.key }}
+  </button>
+</div>
 
     <!-- ✅ 标准版：好感度显示条 -->
     <div class="affinity-bar" v-if="mode === 'standard'">
@@ -162,6 +177,12 @@
       <div class="affinity-right" v-if="affinityTip">
         {{ affinityTip }}
       </div>
+    </div>
+
+    <div class="panel-resize" v-if="mode === 'standard' && dockEnabled">
+      <span class="panel-resize-label">高度</span>
+      <input type="range" min="380" max="560" step="10" v-model.number="panelHeight" />
+      <span class="panel-resize-value">{{ panelHeight }}px</span>
     </div>
 
     <!-- 主题面板（保持你现有） -->
@@ -209,19 +230,23 @@
       </div>
     </div>
 
-    <div ref="talk_place" class="talk-place">
-      <div
-        class="talk_entry"
-        v-for="(item, index) in activeTalkList"
-        :class="{ 'you_color': item.name == 'You' }"
-        :key="index"
-      >
-        <span class="talk_item" :class="{ 'you_color': item.name == 'You' }">{{ item.name }}</span>&nbsp;:&nbsp;
-        <span class="talk_item" :class="{ 'you_color': item.name == 'You' }" v-html="item.content"></span>
+    <div class="chat-main">
+      <div class="talk-content">
+        <div ref="talk_place" class="talk-place">
+          <div
+            class="talk_entry"
+            v-for="(item, index) in activeTalkList"
+            :class="{ 'you_color': item.name == 'You' }"
+            :key="index"
+          >
+            <span class="talk_item" :class="{ 'you_color': item.name == 'You' }">{{ item.name }}</span>&nbsp;:&nbsp;
+            <span class="talk_item" :class="{ 'you_color': item.name == 'You' }" v-html="item.content"></span>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="speak">
+<div class="speak">
       <input
         @keydown="sendMessage($event)"
         ref="you"
@@ -254,6 +279,45 @@
   </button>
 
 </div> <!-- ✅ 关闭 talk-slot -->
+
+      <div class="standard-sidecar" v-if="mode === 'standard' && dockEnabled">
+        <div class="mode-recommend">
+          <div class="mode-recommend-title">快速开始</div>
+          <div class="mode-recommend-list">
+            <button
+              v-for="m in recommendedModes"
+              :key="m"
+              class="mode-recommend-item"
+              @click="quickStartConversation(m)"
+            >{{ m }}</button>
+          </div>
+        </div>
+
+        <div class="conversation-panel">
+          <div class="conversation-panel-header">
+            <button class="mini-btn" @click="createConversation()">+ 新建对话</button>
+            <input
+              class="conversation-search"
+              type="text"
+              v-model.trim="conversationSearch"
+              placeholder="搜索对话"
+            />
+          </div>
+          <div class="conversation-list">
+            <div
+              class="conversation-item"
+              v-for="c in filteredConversations"
+              :key="c.id"
+              :class="{ active: standardActiveConversationId === c.id }"
+              @click="selectConversation(c.id)"
+            >
+              <div class="conversation-item-title">{{ c.title }}</div>
+              <div class="conversation-item-meta">{{ c.mode }} · {{ formatConversationTime(c.updatedAt) }}</div>
+            </div>
+            <div class="conversation-empty" v-if="filteredConversations.length===0">没有匹配的对话</div>
+          </div>
+        </div>
+      </div>
 
       <!-- 右侧：头像 + 公告 + 指令 -->
   <div class="profile" :class="{ 'dock-bottom': dockEnabled && dockPos==='bottom' }">
@@ -469,6 +533,15 @@ export default class chatroom extends Vue {
   // 三档：standard / classic / custom
   mode: 'standard' | 'classic' | 'custom' = 'standard';
 
+
+  // 标准版会话记录（仿 ChatGPT）
+  panelHeight: number = 420;
+  conversationSearch: string = '';
+  standardActiveConversationId: string = '';
+  standardConversations: any[] = [];
+  recommendedModes: string[] = ['聊天', '补习', '演绎', '调情'];
+  private standardReplySeq: number = 0;
+
   // =========================
   // ✅ 标准版好感度显示状态
   // =========================
@@ -480,6 +553,7 @@ private affinityTimer: number | null = null;
 
 private bgPresets: any[] = [{ key: 'plain', label: '纯色', url: '' }];
 private bgKey: string = 'cnny';
+private bgPanelOpen: boolean = false;
 
 private dragZone: 'left' | 'right' | 'bottom' | 'center' = 'bottom';
 
@@ -595,6 +669,22 @@ private profilePanelOpen: boolean = false; // 默认隐藏
     return this.talk_list;
   }
 
+
+
+  get filteredConversations() {
+    const keyword = (this.conversationSearch || '').toLowerCase();
+    if (!keyword) return this.standardConversations;
+    return this.standardConversations.filter((c: any) => {
+      const text = (c.title + ' ' + c.mode).toLowerCase();
+      return text.indexOf(keyword) >= 0;
+    });
+  }
+
+  get talkSlotStyle(): any {
+    return {
+      height: this.panelHeight + 'px'
+    };
+  }
   get inputPlaceholder(): string {
     if (this.mode === 'classic') {
       if (this.classicTeachMode) return '经典版教学中：先输入“问”，再输入“答”（exit 退出）';
@@ -731,9 +821,9 @@ get dockTabStyle(): any {
 }
 
 get talkPanelStyle(): any {
-  if (!this.dockEnabled) return {};
+  if (!this.dockEnabled) return { height: this.panelHeight + "px" };
 
-  var st: any = { position: 'fixed', zIndex: 9990 };
+  var st: any = { position: 'fixed', zIndex: 9990, height: this.panelHeight + 'px' };
 
   // 基础吸附位
   if (this.dockPos === 'center') {
@@ -777,6 +867,7 @@ get talkPanelStyle(): any {
 
   created() {
     this.loadAuthFromStorage();
+    this.loadConversationsFromStorage();
   }
 
 mounted() {
@@ -841,6 +932,7 @@ beforeDestroy() {
 
   updated() {
     this._scrollBottom();
+    this.saveConversationsToStorage();
   }
 
 private hideDock() {
@@ -1314,16 +1406,18 @@ if (this.tryHandleUiCommand(_content)) {
       return;
     }
 
+    if (this.mode === 'standard' && !this.standardActiveConversationId) {
+      this.createConversation('聊天');
+    }
+
     // ✅ 凌晨锁（1:00–5:00）：先提示健康，输入“1”可继续
     if (this.isLateNight()) {
       const s = _content;
       const lower = (s || '').toLowerCase();
       const emergency = this.isEmergencyMessage(lower);
 
-      // 1) 如果正在等“1”，且用户输入了“1”：解锁，并继续回答刚才被挡的那一句
       if (this.lateNightLockPending && this.isLateNightUnlockCode(s)) {
         this.activeTalkList.push(Core.speak(YOU, s));
-
         this.unlockLateNight();
         this.activeTalkList.push(Core.speak(MARISA, this.lateNightUnlockedMessage()));
         if ((this as any).setAvatar) (this as any).setAvatar('happy', 1500);
@@ -1331,8 +1425,6 @@ if (this.tryHandleUiCommand(_content)) {
         const pending = this.lateNightPendingMsg;
         this.lateNightPendingMsg = '';
         this.lateNightLockPending = false;
-
-        // 自动继续处理上一条（不重复再显示一次 You: pending，因为上次已经显示过了）
         if (pending && pending.trim() !== '') {
           this.dispatchByMode(pending);
         }
@@ -1341,7 +1433,6 @@ if (this.tryHandleUiCommand(_content)) {
         return;
       }
 
-      // 2) 未解锁且非紧急：挡住并提示（并记住这句话，等待用户输入“1”）
       if (!this.isLateNightOverrideActive() && !emergency) {
         this.activeTalkList.push(Core.speak(YOU, s));
         this.activeTalkList.push(Core.speak(MARISA, this.lateNightLockMessage()));
@@ -1353,14 +1444,20 @@ if (this.tryHandleUiCommand(_content)) {
         (this.$refs.you as any).value = '';
         return;
       }
-
-      // 3) 已解锁 或 紧急消息：正常放行（继续往下走）
     } else {
-      // 不在凌晨时段：清理锁状态 + 过期解锁
       this.lateNightLockPending = false;
       this.lateNightPendingMsg = '';
       this.lateNightUnlockedUntil = 0;
       localStorage.removeItem('wm_late_unlock_until');
+    }
+
+    if (this.mode === 'standard') {
+      const conversationId = this.ensureStandardConversation('聊天');
+      this.appendStandardMessage(conversationId, Core.speak(YOU, _content));
+      this.dispatchByMode(_content, conversationId);
+      this.bumpConversationUpdatedAt(conversationId);
+      (this.$refs.you as any).value = '';
+      return;
     }
 
     // ✅ 自设版：未登录或未选人格 -> 直接提示（不发送到后端）
@@ -1381,56 +1478,57 @@ if (this.tryHandleUiCommand(_content)) {
 
     // 模式分流
     this.dispatchByMode(_content);
+    this.bumpConversationUpdatedAt();
 
     (this.$refs.you as any).value = '';
   }
 
   // 标准版：保留 status，其它走默认 reply；teach/forget 在标准版不启用
-  private _marisaThinkingStandard(_content: string) {
-    if (_content === 'status') { this._marisaStatus(); return; }
+  private _marisaThinkingStandard(_content: string, conversationId: string) {
+    if (_content === 'status') { this._marisaStatus(conversationId); return; }
 
     // 标准版：不使用 teach/forget
     if (_content === 'teach' || _content === 'forget') {
-      this.activeTalkList.push(Core.speak(MARISA, '标准版不支持 teach/forget，请切换到自设版使用～'));
+      this.appendStandardMessage(conversationId, Core.speak(MARISA, '标准版不支持 teach/forget，请切换到自设版使用～'));
       return;
     }
 
-    this._marisaReplyStandard(_content);
+    this._marisaReplyStandard(_content, conversationId);
   }
 
   // ✅ 标准版：走 Core.replyStandard（带 token + 返回 meta/affinity）
-  private async _marisaReplyStandard(_content: string) {
+  private async _marisaReplyStandard(_content: string, conversationId: string) {
     this.setAvatar('think', 0);
+    this.standardReplySeq++;
 
-    const data = await (Core as any).replyStandard(_content);
+    const prompt = this.formatStandardPrompt(_content, conversationId);
+    const data = await (Core as any).replyStandard(prompt);
 
     // 兼容：data.answer
     if (data && typeof data.answer === 'string') {
       const answer = data.answer;
 
-      this.activeTalkList.push(Core.speak(MARISA, answer));
+      this.appendStandardMessage(conversationId, Core.speak(MARISA, answer));
       this.setAvatar(this.detectAvatarFromReply(answer), 2500);
+      this.bumpConversationUpdatedAt(conversationId);
 
       // ✅ 更新好感度显示
       this.applyAffinityFromAnyData(data);
-
-      // ✅ 达到 100 给提示（只提示；真正放行逻辑仍应后端控制）
-      if (this.affinityCanIntimate) {
-        this.activeTalkList.push(Core.speak(MARISA, '（小声）…好感度满了诶。只允许轻轻的那种，别得寸进尺DA☆ZE！'));
-      }
       return;
     }
 
     // 兼容：如果后端还是只回字符串（极少数情况）
     if (typeof data === 'string') {
-      this.activeTalkList.push(Core.speak(MARISA, data));
+      this.appendStandardMessage(conversationId, Core.speak(MARISA, data));
       this.setAvatar(this.detectAvatarFromReply(data), 2500);
+      this.bumpConversationUpdatedAt(conversationId);
       return;
     }
 
     // fallback
-    this.activeTalkList.push(Core.speak(MARISA, '（标准版）网络错误…'));
+    this.appendStandardMessage(conversationId, Core.speak(MARISA, '（标准版）网络错误…'));
     this.setAvatar('error', 3500);
+    this.bumpConversationUpdatedAt(conversationId);
   }
 
   // ===== 经典版：teach/forget/status + /api/classic/reply =====
@@ -1557,7 +1655,10 @@ if (this.tryHandleUiCommand(_content)) {
     if (!resp.ok) return;
     var arr = await resp.json();
     if (arr && arr.length) {
-      this.bgPresets = arr;
+      // 永远保留 plain
+var merged = [{ key: 'plain', label: '纯色', url: '' }];
+for (var i = 0; i < arr.length; i++) merged.push(arr[i]);
+this.bgPresets = merged;
       // 如果保存的 key 不存在，回退到第一个
       if (!this.getBgUrlByKey(this.bgKey) && this.bgKey !== 'plain') {
         this.bgKey = arr[0].key || 'plain';
@@ -1697,8 +1798,13 @@ private nextBg() {
   }
 
   // 标准版 status：仍用旧接口
-  private async _marisaStatus() {
+  private async _marisaStatus(conversationId?: string) {
     const weight: number = await Core.status();
+    if (conversationId) {
+      if (weight) this.appendStandardMessage(conversationId, Core.speak(MARISA, `目前魔理沙的脑重量是 ${weight} 克。`));
+      else this.appendStandardMessage(conversationId, Core.speak(MARISA, `我的记忆要一片混乱了 ...`));
+      return;
+    }
     if (weight) this.activeTalkList.push(Core.speak(MARISA, `目前魔理沙的脑重量是 ${weight} 克。`));
     else this.activeTalkList.push(Core.speak(MARISA, `我的记忆要一片混乱了 ...`));
   }
@@ -1782,14 +1888,111 @@ private nextBg() {
       + `<br><span style="opacity:.85">（已临时解锁，持续到 ${hh}:${mm}）</span>`;
   }
 
-  private dispatchByMode(_content: string) {
+  private dispatchByMode(_content: string, standardConversationId?: string) {
     if (this.mode === 'standard') {
-      this._marisaThinkingStandard(_content);
+      this._marisaThinkingStandard(_content, standardConversationId || this.standardActiveConversationId);
     } else if (this.mode === 'classic') {
       this._marisaThinkingClassic(_content);
     } else {
       this._marisaThinkingCustom(_content);
     }
+  }
+
+  private loadConversationsFromStorage() {
+    try {
+      const raw = localStorage.getItem('wm_standard_conversations') || '[]';
+      const list = JSON.parse(raw);
+      if (Array.isArray(list)) this.standardConversations = list;
+    } catch (e) {
+      this.standardConversations = [];
+    }
+
+    if (this.standardConversations.length > 0) {
+      this.selectConversation(this.standardConversations[0].id);
+    } else {
+      this.talk_list = [];
+      this.standardActiveConversationId = '';
+    }
+  }
+
+  private saveConversationsToStorage() {
+    if (!Array.isArray(this.standardConversations)) return;
+    localStorage.setItem('wm_standard_conversations', JSON.stringify(this.standardConversations));
+  }
+
+  private createConversation(modeLabel: string = '聊天'): string {
+    const id = 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+    const now = Date.now();
+    const item = {
+      id,
+      title: modeLabel + '对话 ' + (this.standardConversations.length + 1),
+      mode: modeLabel,
+      messages: [] as any[],
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.standardConversations.unshift(item);
+    this.selectConversation(id);
+    this.appendStandardMessage(id, Core.speak(MARISA, '已进入「' + modeLabel + '」模式，来聊天吧～'));
+    this.bumpConversationUpdatedAt(id);
+    return id;
+  }
+
+  private selectConversation(id: string) {
+    this.standardActiveConversationId = id;
+    const current = this.getStandardConversation(id);
+    this.talk_list = current ? current.messages.slice() : [];
+  }
+
+  private quickStartConversation(modeLabel: string) {
+    this.createConversation(modeLabel);
+  }
+
+  private formatConversationTime(ts: number) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    const pad = (n: number) => (n < 10 ? '0' + n : '' + n);
+    return `${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  private getCurrentConversationMode(conversationId?: string): string {
+    const targetId = conversationId || this.standardActiveConversationId;
+    if (!targetId) return '聊天';
+    const current = this.getStandardConversation(targetId);
+    return current && current.mode ? current.mode : '聊天';
+  }
+
+  private formatStandardPrompt(raw: string, conversationId?: string): string {
+    const m = this.getCurrentConversationMode(conversationId);
+    if (m === '聊天') return raw;
+    return '【' + m + '模式】' + raw;
+  }
+
+  private bumpConversationUpdatedAt(conversationId?: string) {
+    const targetId = conversationId || this.standardActiveConversationId;
+    if (!targetId) return;
+    const current = this.getStandardConversation(targetId);
+    if (!current) return;
+    current.updatedAt = Date.now();
+    this.standardConversations = this.standardConversations.slice().sort((a: any, b: any) => b.updatedAt - a.updatedAt);
+  }
+
+  private getStandardConversation(id: string): any {
+    return this.standardConversations.find((c: any) => c.id === id);
+  }
+
+  private appendStandardMessage(conversationId: string, message: any) {
+    const current = this.getStandardConversation(conversationId);
+    if (!current) return;
+    current.messages.push(message);
+    if (this.standardActiveConversationId === conversationId) {
+      this.talk_list = current.messages.slice();
+    }
+  }
+
+  private ensureStandardConversation(defaultMode: string = '聊天'): string {
+    if (this.standardActiveConversationId) return this.standardActiveConversationId;
+    return this.createConversation(defaultMode);
   }
 
   private isEmergencyMessage(sLower: string): boolean {
@@ -1849,6 +2052,128 @@ private nextBg() {
 
 .affinity-right
   opacity 0.85
+
+
+.panel-resize
+  display flex
+  align-items center
+  gap 8px
+  margin 8px 10px 0
+  font-size 12px
+
+.panel-resize input[type='range']
+  flex 1
+
+.panel-resize-value
+  opacity .8
+  min-width 54px
+  text-align right
+
+.mode-recommend
+  margin 0
+  padding 10px
+  border 1px solid rgba(0,0,0,.12)
+  border-radius 12px
+  background rgba(255,255,255,.72)
+
+.mode-recommend-title
+  font-size 12px
+  font-weight 800
+  margin-bottom 8px
+
+.mode-recommend-list
+  display flex
+  gap 8px
+  flex-wrap wrap
+
+.mode-recommend-item
+  padding 6px 12px
+  border-radius 999px
+  border 1px solid rgba(60,120,255,.35)
+  background rgba(220,235,255,.85)
+  color rgba(30,90,210,1)
+  cursor pointer
+  font-size 12px
+  font-weight 700
+
+.chat-main
+  flex 1
+  min-height 0
+  display flex
+
+.standard-sidecar
+  position fixed
+  right 16px
+  top 76px
+  width 280px
+  height calc(100vh - 100px)
+  z-index 9991
+  display flex
+  flex-direction column
+  gap 10px
+
+.conversation-panel
+  flex 1
+  border 1px solid rgba(0,0,0,.12)
+  border-radius 12px
+  background rgba(255,255,255,.72)
+  display flex
+  flex-direction column
+  min-height 0
+
+.conversation-panel-header
+  padding 8px
+  border-bottom 1px solid rgba(0,0,0,.10)
+  display flex
+  flex-direction column
+  gap 8px
+
+.conversation-search
+  width 100%
+  border 1px solid rgba(0,0,0,.14)
+  border-radius 8px
+  padding 6px 8px
+  font-size 12px
+  outline none
+
+.conversation-list
+  flex 1
+  min-height 0
+  overflow auto
+  padding 8px
+
+.conversation-item
+  border 1px solid rgba(0,0,0,.1)
+  border-radius 10px
+  padding 8px
+  margin-bottom 8px
+  cursor pointer
+  background rgba(255,255,255,.75)
+
+.conversation-item.active
+  border-color rgba(60,120,255,.35)
+  background rgba(210,235,255,.85)
+
+.conversation-item-title
+  font-size 12px
+  font-weight 800
+
+.conversation-item-meta
+  margin-top 4px
+  font-size 11px
+  opacity .7
+
+.conversation-empty
+  font-size 12px
+  opacity .7
+
+.talk-content
+  flex 1
+  min-width 0
+  display flex
+
+.talk-content .talk-place
+  width 100%
 
 /* 左侧人格面板 */
 .persona-panel
@@ -2345,6 +2670,12 @@ private nextBg() {
     overflow-y: auto
     -webkit-overflow-scrolling: touch
 
+  .standard-sidecar
+    display none
+
+  .panel-resize
+    margin 8px 0 0
+
   .speak
     height: auto
     padding: 8px
@@ -2390,10 +2721,38 @@ private nextBg() {
     -webkit-overflow-scrolling: touch
     overflow-y: auto
 
+/* ✅ 防横向溢出（移动端最常见问题） */
+.chatroom
+  overflow-x hidden
+  box-sizing border-box
+
+.chatroom *
+  box-sizing border-box
+
+/* ✅ 默认（桌面）对话框占位：700，但不会超过视口 */
 .talk-slot
-  position: relative
-  width: 700px
-  height: 500px
+  position relative
+  width 700px
+  height 500px
+  max-width calc(100vw - 24px)
+  margin 0 auto
+
+/* ✅ 文字强制换行，防止长串把布局撑爆 */
+.talk_entry, .talk_item, .msg-content, .about
+  overflow-wrap anywhere
+  word-break break-word
+
+@media (max-width: 900px)
+  .talk-slot
+    width 100% !important
+    height auto !important
+    max-width 100% !important
+    margin 0 !important
+  
+@media (max-width: 900px)
+  .modal
+    width 92vw
+    max-width 92vw
 
 /* 浮层时更像“对话框” */
 .talk-panel.is-docked
@@ -2570,4 +2929,30 @@ private nextBg() {
   .profile-panel.panel-fixed
     left 16px
 
+.bg-panel
+  margin 8px 10px
+  padding 10px
+  border 1px solid rgba(0,0,0,.12)
+  border-radius 12px
+  background rgba(255,255,255,.70)
+  display flex
+  flex-wrap wrap
+  gap 8px
+  max-height 160px
+  overflow auto
+
+.bg-jump
+  padding 6px 10px
+  border 1px solid rgba(60,120,255,.25)
+  background rgba(220,235,255,.65)
+  border-radius 10px
+  cursor pointer
+  font-size 12px
+  font-weight 800
+  color rgba(30,90,210,1)
+
+.bg-jump.on
+  background rgba(60,120,255,.85)
+  color #fff
+  border-color rgba(60,120,255,.45)
 </style>

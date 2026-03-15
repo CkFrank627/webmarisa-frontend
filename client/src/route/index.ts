@@ -11,6 +11,16 @@ export default new Router({
       path: '/',
       name: 'home',
       component: () => import('../views/chatroom.vue')
+    },
+    {
+      path: '/discussion',
+      name: 'discussion',
+      component: () => import('../views/discussion.vue')
+    },
+    {
+      path: '/discussion/:section/:postId',
+      name: 'discussion-post',
+      component: () => import('../views/discussionPost.vue')
     }
   ]
 })

@@ -1,6 +1,5 @@
 // client/src/core/index.ts
 import Api from '../api/v1'
-import Tools from '../assets/js/tools'
 
 interface ISpeakConfig {
   name: string
@@ -16,42 +15,14 @@ export default class Core {
     return obj
   }
 
-  // ===== 新增：token & headers =====
-  private static getToken(): string {
-    // 你现在登录保存的是 wm_token（chatroom.vue 里 setItem('wm_token', token)）
-    return (
-      localStorage.getItem('wm_token') ||
-      localStorage.getItem('token') ||
-      localStorage.getItem('marisa_token') ||
-      localStorage.getItem('auth_token') ||
-      ''
-    )
-  }
-
-  private static authHeaders(): any {
-    const t = Core.getToken()
-    if (!t) return {}
-    return { Authorization: 'Bearer ' + t }
-  }
-
   /**
    * ✅ 新增：标准版 reply（返回 data：包含 answer + affinity_*）
    * 后端返回结构：{ code: 200, data: { answer: "...", affinity_score, affinity_level, affinity_can_intimate } }
    */
   public static async replyStandard (content: string): Promise<any | undefined> {
     try {
-      const resp = await fetch('/Reply', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...Core.authHeaders(),
-        } as any,
-        body: JSON.stringify({ keyword: content }),
-        credentials: 'include', // ✅ 保留 cookie（sid 会话记忆）
-      })
-
-      const json = await resp.json()
-      if (json && json.data) return json.data
+      const res = await Api.fecthMemory({ keyword: content })
+      if (res && res.data && res.data.data) return res.data.data
       return undefined
     } catch (err) {
       // 注意：这里不要 throw，保持兼容旧逻辑
@@ -67,17 +38,7 @@ export default class Core {
   public static async reply (content: string) : Promise<any> {
     const data = await Core.replyStandard(content)
     if (data && typeof data.answer === 'string') return data.answer
-
-    // 兼容：如果你旧 Api.fecthMemory 仍能用，也可 fallback
-    try {
-      const config = { keyword: content }
-      const res = await Api.fecthMemory(config as any)
-      return res.data.data.answer
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.log(`回复失败 ... ${err}`)
-      return undefined
-    }
+    return undefined
   }
 
   /**
@@ -86,11 +47,10 @@ export default class Core {
    */
   public static async getMyAffinity(): Promise<any | undefined> {
     try {
+      const token = localStorage.getItem('wm_token') || ''
       const resp = await fetch('/api/affinity/me', {
         method: 'GET',
-        headers: {
-          ...Core.authHeaders(),
-        } as any,
+        headers: token ? { Authorization: 'Bearer ' + token } as any : {} as any,
         credentials: 'include',
       })
       const json = await resp.json()
@@ -106,9 +66,7 @@ export default class Core {
    */
   public static async teach (content: string) : Promise<any> {
     const str = content.split('')
-    const realIp: string = await Tools.getIp()
     const config = {
-      ip: realIp,
       keyword: str[0],
       answer: str[1]
     }
