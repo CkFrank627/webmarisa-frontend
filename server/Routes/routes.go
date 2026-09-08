@@ -42,6 +42,12 @@ func Configure(app *iris.Application) {
 	})
 
 	app.PartyFunc("/api", func(r iris.Party) {
+		r.Get("/library", hero.Handler(Controllers.LibraryList))
+		r.Post("/library", Controllers.AuditUserInput, hero.Handler(Controllers.LibraryPublish))
+		r.Get("/library/{id:int64}", hero.Handler(Controllers.LibraryDetail))
+		r.Put("/library/{id:int64}/like", hero.Handler(Controllers.LibraryLike))
+		r.Get("/library/{id:int64}/comments", hero.Handler(Controllers.LibraryComments))
+		r.Post("/library/{id:int64}/comments", Controllers.AuditUserInput, hero.Handler(Controllers.LibraryComment))
 		r.Get("/stats", hero.Handler(Controllers.GetStats))
 		r.Post("/auth/register", hero.Handler(Controllers.Register))
 		r.Post("/auth/login", hero.Handler(Controllers.Login))

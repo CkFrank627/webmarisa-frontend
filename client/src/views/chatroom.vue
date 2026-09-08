@@ -1,5 +1,6 @@
 <template>
   <div class="chatroom" :style="rootStyle">
+    <ConversationLibrary ref="library" :messages="activeTalkList" :suggested-title="libraryTitle" :token="isLoggedIn ? auth.token : ''" @login="openAuth('login')" />
     <div class="container">
       <!-- 左侧：自设版人格列表（仅自设版显示） -->
       <div class="persona-panel" v-if="mode === 'custom'">
@@ -92,6 +93,7 @@
         </div>
 
         <button class="mini-btn" @click="aboutOpen = true">简介</button>
+        <button class="mini-btn" @click="$refs.library.preview()">记录进图书馆</button>
 
         <button
           v-if="mode === 'standard'"
@@ -238,7 +240,7 @@
 
     <div class="chat-main">
       <div class="talk-content">
-        <div ref="talk_place" class="talk-place">
+        <div ref="talk_place" class="talk-place" role="log" aria-label="聊天记录" aria-live="polite" @scroll="onTalkScroll">
           <div
             class="talk_entry"
             v-for="(item, index) in activeTalkList"
@@ -247,31 +249,37 @@
           >
             <span class="talk_item" :class="{ 'you_color': item.name == 'You' }">{{ item.name }}</span>&nbsp;:&nbsp;
             <span class="talk_item" :class="{ 'you_color': item.name == 'You' }" style="white-space: pre-wrap; overflow-wrap: anywhere">{{ item.content }}</span>
+            <button class="message-copy" @click="copyMessage(item.content)" aria-label="复制这条消息">复制</button>
           </div>
         </div>
       </div>
     </div>
+    <button v-if="!followLatest" class="mini-btn jump-latest" @click="jumpToLatest">↓ 回到最新消息</button>
+    <div class="chat-feedback" role="status">{{ copyNotice || (standardPending ? '魔理沙正在思考，请稍候…' : '') }}</div>
 
 <div class="speak" v-if="!isEraMode">
-      <input
+      <textarea
+        v-model="draft"
         @keydown="sendMessage($event)"
+        @compositionstart="composing = true"
+        @compositionend="composing = false"
         ref="you"
-        v-focus="true"
-        type="text"
         name="you"
+        rows="2"
+        aria-label="聊天消息"
+        aria-describedby="composer-hint"
         :disabled="mode==='custom' && (!isLoggedIn || !selectedPersonaId)"
         :placeholder="inputPlaceholder"
-      />
-      <input
-        @click="sendMessage($event)"
-        ref="submit"
-        type="submit"
-        value="发送"
-        :disabled="mode==='custom' && (!isLoggedIn || !selectedPersonaId)"
-      />
+      ></textarea>
+      <button class="send-btn" @click="sendMessage($event)"
+        :disabled="!draft.trim() || standardPending || (mode==='custom' && (!isLoggedIn || !selectedPersonaId))">
+        {{ standardPending ? '等待回复' : '发送' }}
+      </button>
     </div>
 
-    <div class="era-actions" v-else>
+    <div id="composer-hint" class="composer-hint" v-if="!isEraMode">Enter 发送 · Shift + Enter 换行</div>
+
+    <div class="era-actions" v-if="isEraMode">
       <button
         v-for="action in eraActions"
         :key="action.key"
@@ -635,6 +643,7 @@
 import { Component, Vue } from 'vue-property-decorator';
 import Core from '../core';
 import axios from 'axios';
+import ConversationLibrary from '../components/ConversationLibrary.vue';
 
 const http = axios.create({
   withCredentials: true,
@@ -655,7 +664,7 @@ const YOU: string = 'You';
 type AvatarKey = 'idle' | 'think' | 'happy' | 'sad' | 'teach' | 'error';
 type AvatarMode = 'cover' | 'contain' | 'fit-h' | 'fit-w' | 'tile' | 'pixel';
 
-@Component
+@Component({ components: { ConversationLibrary } })
 export default class chatroom extends Vue {
   // 标准版对话
   talk_list: any[] = [];
@@ -750,6 +759,38 @@ private profilePanelOpen: boolean = false; // 默认隐藏
   avatarMode: AvatarMode = 'cover';
   private avatarResetTimer: number | null = null;
 
+  draft: string = '';
+  composing: boolean = false;
+  followLatest: boolean = true;
+  pendingConversations: string[] = [];
+  copyNotice: string = '';
+  private copyTimer: number | null = null;
+
+  get standardPending(): boolean {
+    return this.mode === 'standard' && this.pendingConversations.indexOf(this.standardActiveConversationId) >= 0;
+  }
+
+  private onTalkScroll() {
+    const el = this.$refs.talk_place;
+    if (el) this.followLatest = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+  }
+
+  private jumpToLatest() {
+    this.followLatest = true;
+    this._scrollBottom();
+  }
+
+  private async copyMessage(content: string) {
+    try {
+      await (navigator as any).clipboard.writeText(content);
+      this.copyNotice = '已复制消息';
+    } catch (_) {
+      this.copyNotice = '复制失败，请选中文字后手动复制';
+    }
+    if (this.copyTimer) window.clearTimeout(this.copyTimer);
+    this.copyTimer = window.setTimeout(() => { this.copyNotice = ''; }, 2500);
+  }
+
   uiOpen: boolean = false;
 
   theme: any = {
@@ -812,7 +853,7 @@ private profilePanelOpen: boolean = false; // 默认隐藏
 
   $refs!: {
     talk_place: HTMLFormElement,
-    you: HTMLFormElement,
+    you: HTMLTextAreaElement,
     submit: HTMLFormElement,
   }
 
@@ -820,6 +861,12 @@ private profilePanelOpen: boolean = false; // 默认隐藏
     if (this.mode === 'custom') return this.custom_talk_list;
     if (this.mode === 'classic') return this.classic_talk_list;
     return this.talk_list;
+  }
+
+  get libraryTitle(): string {
+    const current = this.getStandardConversation(this.standardActiveConversationId);
+    if (this.mode === 'standard' && current) return current.title;
+    return this.mode === 'custom' ? '自设版对话' : '经典版对话';
   }
 
 
@@ -997,7 +1044,7 @@ mounted() {
     this.dockPos = 'center';
     this.dockHidden = false;
     this.dockStealth = false;
-    this.conversationDrawerOpen = true;
+    this.conversationDrawerOpen = false;
   }
 
   // resize：实时切换 desktop/移动端策略
@@ -1008,7 +1055,7 @@ mounted() {
       this.dockPos = 'center';
       this.dockHidden = false;
       this.dockStealth = false;
-      if (wasDesktop) this.conversationDrawerOpen = true;
+      if (wasDesktop) this.conversationDrawerOpen = false;
     } else {
       // 从移动端切回桌面端：回到底部（或你也可以保留上次位置）
       if (this.dockPos === 'center') this.dockPos = 'bottom';
@@ -1031,6 +1078,7 @@ mounted() {
 }
 
 beforeDestroy() {
+  if (this.copyTimer) window.clearTimeout(this.copyTimer);
   if (this.statsTimer) window.clearInterval(this.statsTimer);
   if (this.conversationSyncTimer) window.clearTimeout(this.conversationSyncTimer);
   if (this._winResize) window.removeEventListener('resize', this._winResize);
@@ -1115,6 +1163,7 @@ private getPoint(e: any): any {
 }
 
   private setMode(m: 'standard' | 'classic' | 'custom') {
+    this.followLatest = true;
     if (m === 'custom' && !this.isLoggedIn) {
       this.authError = '请先登录以使用自设版';
       this.openAuth('login');
@@ -1422,6 +1471,7 @@ private async loadStandardAffinity() {
   }
 
   private selectPersona(p: any) {
+    this.followLatest = true;
     this.selectedPersonaId = p.id;
     // 选择人格后：自设版输入可以用了
     this.custom_talk_list.push(Core.speak(MARISA, `（自设版）已选择人格「${p.name}」。`));
@@ -1513,20 +1563,16 @@ private async loadStandardAffinity() {
 
   // ===== chat =====
   private async sendMessage(event: KeyboardEvent | MouseEvent) {
-    let _content: string = (this.$refs.you as any).value;
-    _content = (_content || '').trim();
-    // ✅ UI 指令（不发给后端）
-if (this.tryHandleUiCommand(_content)) {
-  (this.$refs.you as any).value = '';
-  return;
-}
-
-    const isEnter = (event as any).keyCode === 13;
-    const isClick = (event as any).button === 0;
-    if (!isEnter && !isClick) return;
-
-    if (_content === '') {
-      this.activeTalkList.push(Core.speak(MARISA, 'ん？ 你说了什么咩 ¿'));
+    const keyEvent = event as KeyboardEvent;
+    if (event.type === 'keydown') {
+      if (keyEvent.key !== 'Enter' || keyEvent.shiftKey || this.composing || (keyEvent as any).isComposing || keyEvent.keyCode === 229) return;
+      event.preventDefault();
+    }
+    const _content = this.draft.trim();
+    if (!_content || this.standardPending) return;
+    this.followLatest = true;
+    if (this.tryHandleUiCommand(_content)) {
+      this.draft = '';
       return;
     }
 
@@ -1553,7 +1599,7 @@ if (this.tryHandleUiCommand(_content)) {
           this.dispatchByMode(pending);
         }
 
-        (this.$refs.you as any).value = '';
+        this.draft = '';
         return;
       }
 
@@ -1565,7 +1611,7 @@ if (this.tryHandleUiCommand(_content)) {
         this.lateNightLockPending = true;
         this.lateNightPendingMsg = s;
 
-        (this.$refs.you as any).value = '';
+        this.draft = '';
         return;
       }
     } else {
@@ -1580,7 +1626,7 @@ if (this.tryHandleUiCommand(_content)) {
       this.appendStandardMessage(conversationId, Core.speak(YOU, _content));
       this.dispatchByMode(_content, conversationId);
       this.bumpConversationUpdatedAt(conversationId);
-      (this.$refs.you as any).value = '';
+      this.draft = '';
       return;
     }
 
@@ -1604,7 +1650,7 @@ if (this.tryHandleUiCommand(_content)) {
     this.dispatchByMode(_content);
     this.bumpConversationUpdatedAt();
 
-    (this.$refs.you as any).value = '';
+    this.draft = '';
   }
 
   // 标准版：保留 status，其它走默认 reply；teach/forget 在标准版不启用
@@ -1630,7 +1676,16 @@ if (this.tryHandleUiCommand(_content)) {
     this.standardReplySeq++;
 
     const prompt = this.formatStandardPrompt(_content, conversationId);
-    const data = await (Core as any).replyStandard(prompt);
+    if (this.pendingConversations.indexOf(conversationId) >= 0) return;
+    this.pendingConversations.push(conversationId);
+    let data: any;
+    try {
+      data = await (Core as any).replyStandard(prompt);
+    } catch (_) {
+      data = undefined;
+    } finally {
+      this.pendingConversations = this.pendingConversations.filter(id => id !== conversationId);
+    }
 
     // 兼容：data.answer
     if (data && typeof data.answer === 'string') {
@@ -1654,7 +1709,7 @@ if (this.tryHandleUiCommand(_content)) {
     }
 
     // fallback
-    this.appendStandardMessage(conversationId, Core.speak(MARISA, '（标准版）网络错误…'));
+    this.appendStandardMessage(conversationId, Core.speak(MARISA, '回复未能完成，请稍后重新发送上一条消息。'));
     this.setAvatar('error', 3500);
     this.bumpConversationUpdatedAt(conversationId);
   }
@@ -2009,7 +2064,7 @@ private nextBg() {
   private _scrollBottom() {
     this.$nextTick(() => {
       const tp: any = this.$refs.talk_place as any;
-      if (tp) tp.scrollTop = tp.scrollHeight;
+      if (tp && this.followLatest) tp.scrollTop = tp.scrollHeight;
     });
   }
 
@@ -2261,6 +2316,7 @@ private nextBg() {
   }
 
   private selectConversation(id: string) {
+    this.followLatest = true;
     this.conversationMenuId = '';
     this.standardActiveConversationId = id;
     const current = this.getStandardConversation(id);
@@ -3040,7 +3096,7 @@ private nextBg() {
   display flex
   align-items center
   justify-content center
-  z-index 9999
+  z-index 13010
 
 .modal
   width 420px
@@ -3679,4 +3735,68 @@ private nextBg() {
   background rgba(60,120,255,.85)
   color #fff
   border-color rgba(60,120,255,.45)
+
+.talk-panel .speak
+  height auto
+  align-items flex-end
+
+.speak textarea
+  flex 1
+  min-width 0
+  min-height 52px
+  max-height 140px
+  resize vertical
+  padding 8px 10px
+  border 1px solid rgba(0,0,0,.22)
+  border-radius 10px
+  background rgba(255,255,255,.88)
+  color #222
+  font-family inherit
+  font-size 16px
+  line-height 1.5
+
+.send-btn
+  min-height 44px
+  min-width 80px
+  padding 8px 12px
+  border 1px solid #3666b0
+  border-radius 10px
+  background #315fa6
+  color white
+  cursor pointer
+
+.send-btn:disabled
+  opacity .55
+  cursor not-allowed
+
+.composer-hint, .chat-feedback
+  flex-shrink 0
+  padding 3px 12px
+  font-size 12px
+
+.chat-feedback:empty
+  display none
+
+.message-copy
+  margin-left 8px
+  padding 4px 8px
+  border 1px solid rgba(0,0,0,.18)
+  border-radius 6px
+  background rgba(255,255,255,.8)
+  color #315fa6
+  cursor pointer
+  font-size 12px
+
+.jump-latest
+  align-self center
+  flex-shrink 0
+
+button:focus-visible, textarea:focus-visible, input:focus-visible
+  outline 3px solid #397adc
+  outline-offset 2px
+
+@media (prefers-reduced-motion: reduce)
+  *, *:before, *:after
+    animation none !important
+    transition none !important
 </style>

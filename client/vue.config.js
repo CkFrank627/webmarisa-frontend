@@ -19,6 +19,7 @@ module.exports = {
     https: false,
     hotOnly: false,
     proxy: {
+  '^/api': { target: 'http://localhost:3000', changeOrigin: true },
   '^/Add': { target: 'http://localhost:3000', changeOrigin: true },
   '^/Reply': { target: 'http://localhost:3000', changeOrigin: true },
   '^/Forget': { target: 'http://localhost:3000', changeOrigin: true },
