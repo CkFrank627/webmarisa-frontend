@@ -46,15 +46,8 @@
 
       <!-- 中间：聊天区域 -->
 <!-- 中间：聊天区域 -->
-<div class="talk-slot" :style="talkSlotStyle">
 
-  <!-- ✅ 拖拽判定区（拖拽时显示） -->
-  <div class="dock-zones" v-if="dockEnabled && dragActive">
-    <div class="zone zone-left"   :class="{ on: dragZone==='left' }"></div>
-    <div class="zone zone-right"  :class="{ on: dragZone==='right' }"></div>
-    <div class="zone zone-bottom" :class="{ on: dragZone==='bottom' }"></div>
-    <div class="zone zone-center" :class="{ on: dragZone==='center' }"></div>
-  </div>
+<div class="talk-slot" :style="talkSlotStyle">
 
   <div
     class="talk-panel"
@@ -62,27 +55,6 @@
     :class="talkPanelClass"
     :style="talkPanelStyle"
   >
-    <!-- 拖拽把手 -->
-    <div
-      class="dock-grip"
-      v-if="dockEnabled && !dockHidden"
-      @mousedown="onDockDragStart"
-      @touchstart.prevent="onDockDragStart"
-      title="拖动移动对话框"
-    >
-      ⠿
-    </div>
-
-    <!-- 隐藏按钮（非中置才显示） -->
-    <button
-      class="dock-hide-btn"
-      v-if="dockEnabled && dockPos !== 'center' && !dockHidden"
-      @click="hideDock"
-      :title="'隐藏到' + dockPos"
-    >
-      {{ dockHideText }}
-    </button>
-
     <!-- 顶部工具栏 -->
     <div class="topbar">
       <div class="topbar-left">
@@ -121,6 +93,13 @@
 
         <button class="mini-btn" @click="aboutOpen = true">简介</button>
 
+        <button
+          v-if="mode === 'standard'"
+          class="mini-btn"
+          :class="{ active: !isDesktop && conversationDrawerOpen }"
+          @click="toggleConversationDrawer()"
+        >&#23545;&#35805;&#35760;&#24405;</button>
+
         <template v-if="isLoggedIn">
           <span class="login-badge">已登录：{{ auth.username }}</span>
           <button class="mini-btn" @click="openMessageBoard()">留言板</button>
@@ -153,7 +132,7 @@
 </div>
 
     <!-- ✅ 标准版：好感度显示条 -->
-    <div class="affinity-bar" v-if="mode === 'standard'">
+    <div class="affinity-bar" v-if="mode === 'standard' && !isEraMode">
       <div class="affinity-left">
         <span class="affinity-label">好感度</span>
         <span class="affinity-value">{{ affinityText }}</span>
@@ -179,10 +158,37 @@
       </div>
     </div>
 
-    <div class="panel-resize" v-if="mode === 'standard' && dockEnabled">
+    <div class="panel-resize" v-if="mode === 'standard'">
       <span class="panel-resize-label">高度</span>
-      <input type="range" min="380" max="560" step="10" v-model.number="panelHeight" />
+      <input type="range" min="300" max="520" step="10" v-model.number="panelHeight" />
       <span class="panel-resize-value">{{ panelHeight }}px</span>
+    </div>
+
+    <div class="classic-db-toolbar" v-if="mode === 'classic'">
+      <button class="mini-btn" @click="openClassicDb()">查看数据库</button>
+    </div>
+
+    <div class="era-status" v-if="isEraMode">
+      <div class="era-status-header">
+        <div class="era-status-title">演绎状态</div>
+        <div class="era-status-subtitle">开发中预览：后续可扩展为可编写口上与多结局脚本</div>
+      </div>
+      <div class="era-status-grid">
+        <div class="era-stat" v-for="it in [
+          { key: 'favor', label: '好意' },
+          { key: 'obedience', label: '恭顺' },
+          { key: 'shame', label: '羞耻' },
+          { key: 'desire', label: '情欲' }
+        ]" :key="it.key">
+          <div class="era-stat-meta">
+            <span>{{ it.label }}</span>
+            <b>{{ currentEraStats[it.key] }}</b>
+          </div>
+          <div class="era-stat-bar">
+            <div class="era-stat-fill" :style="{ width: Math.min(100, currentEraStats[it.key]) + '%' }"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 主题面板（保持你现有） -->
@@ -240,13 +246,13 @@
             :key="index"
           >
             <span class="talk_item" :class="{ 'you_color': item.name == 'You' }">{{ item.name }}</span>&nbsp;:&nbsp;
-            <span class="talk_item" :class="{ 'you_color': item.name == 'You' }" v-html="item.content"></span>
+            <span class="talk_item" :class="{ 'you_color': item.name == 'You' }" style="white-space: pre-wrap; overflow-wrap: anywhere">{{ item.content }}</span>
           </div>
         </div>
       </div>
     </div>
 
-<div class="speak">
+<div class="speak" v-if="!isEraMode">
       <input
         @keydown="sendMessage($event)"
         ref="you"
@@ -264,23 +270,93 @@
         :disabled="mode==='custom' && (!isLoggedIn || !selectedPersonaId)"
       />
     </div>
-  </div> <!-- ✅ 关闭 talk-panel -->
 
-  <!-- ✅ 展开按钮（对话框隐藏时出现在边缘） -->
-  <button
-    class="dock-tab"
-    :class="'dock-tab--' + dockPos"
-    v-if="dockEnabled && dockPos !== 'center' && dockHidden"
-    :style="dockTabStyle"
-    @click="showDock"
-    title="展开对话框"
-  >
-    {{ dockTabText }}
-  </button>
+    <div class="era-actions" v-else>
+      <button
+        v-for="action in eraActions"
+        :key="action.key"
+        class="era-action-btn"
+        @click="chooseEraAction(action)"
+      >{{ action.label }}</button>
+    </div>
+  </div> <!-- ✅ 关闭 talk-panel -->
 
 </div> <!-- ✅ 关闭 talk-slot -->
 
-      <div class="standard-sidecar" v-if="mode === 'standard' && dockEnabled">
+      <div
+        v-if="mode === 'standard' && !isDesktop && conversationDrawerOpen"
+        class="mobile-conversation-mask"
+        @click="closeConversationDrawer()"
+      ></div>
+      <div
+        v-if="mode === 'standard' && !isDesktop"
+        class="mobile-conversation-drawer"
+        :class="{ open: conversationDrawerOpen }"
+      >
+        <div class="mobile-conversation-drawer-header">
+          <div class="mobile-conversation-drawer-title">对话记录</div>
+          <button class="mini-btn" @click="closeConversationDrawer()">关闭</button>
+        </div>
+
+        <div class="standard-sidecar mobile-standard-sidecar">
+          <div class="mode-recommend">
+            <div class="mode-recommend-title">快速开始</div>
+            <div class="mode-recommend-list">
+              <button
+                v-for="m in recommendedModes"
+                :key="'mobile_' + m"
+                class="mode-recommend-item"
+                @click="quickStartConversation(m)"
+              >{{ m }}</button>
+            </div>
+          </div>
+
+          <div class="conversation-panel">
+            <div class="conversation-panel-header">
+              <div class="conversation-toolbar">
+                <button class="mini-btn" @click="createConversation()">+ 新建对话</button>
+                <button class="mini-btn" @click="conversationShowArchived = !conversationShowArchived">
+                  {{ conversationShowArchived ? '查看进行中' : '查看存档' }}
+                </button>
+              </div>
+              <input
+                class="conversation-search"
+                type="text"
+                v-model.trim="conversationSearch"
+                placeholder="搜索对话"
+              />
+            </div>
+            <div class="conversation-list">
+              <div
+                class="conversation-item"
+                v-for="c in filteredConversations"
+                :key="'mobile_' + c.id"
+                :class="{ active: standardActiveConversationId === c.id }"
+                @click="selectConversation(c.id)"
+              >
+                <div class="conversation-item-top">
+                  <div class="conversation-item-main">
+                    <div class="conversation-item-title">{{ c.pinned ? '[顶] ' : '' }}{{ c.title }}</div>
+                    <div class="conversation-item-meta">{{ c.mode }} · {{ formatConversationTime(c.updatedAt) }}</div>
+                  </div>
+                  <div class="conversation-item-actions" @click.stop>
+                    <button class="conversation-menu-trigger" @click.stop="toggleConversationMenu(c.id)">···</button>
+                    <div class="conversation-menu" v-if="conversationMenuId === c.id">
+                      <button class="conversation-menu-item" @click="toggleConversationPinned(c)">{{ c.pinned ? '取消置顶' : '置顶' }}</button>
+                      <button class="conversation-menu-item" @click="renameConversation(c)">重命名</button>
+                      <button class="conversation-menu-item" @click="toggleConversationArchived(c)">{{ c.archived ? '取消存档' : '存档' }}</button>
+                      <button class="conversation-menu-item danger" @click="deleteConversation(c)">删除</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="conversation-empty" v-if="filteredConversations.length===0">没有匹配的对话</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="standard-sidecar" v-if="mode === 'standard'">
         <div class="mode-recommend">
           <div class="mode-recommend-title">快速开始</div>
           <div class="mode-recommend-list">
@@ -295,7 +371,12 @@
 
         <div class="conversation-panel">
           <div class="conversation-panel-header">
-            <button class="mini-btn" @click="createConversation()">+ 新建对话</button>
+            <div class="conversation-toolbar">
+              <button class="mini-btn" @click="createConversation()">+ 新建对话</button>
+              <button class="mini-btn" @click="conversationShowArchived = !conversationShowArchived">
+                {{ conversationShowArchived ? '查看进行中' : '查看存档' }}
+              </button>
+            </div>
             <input
               class="conversation-search"
               type="text"
@@ -311,8 +392,21 @@
               :class="{ active: standardActiveConversationId === c.id }"
               @click="selectConversation(c.id)"
             >
-              <div class="conversation-item-title">{{ c.title }}</div>
-              <div class="conversation-item-meta">{{ c.mode }} · {{ formatConversationTime(c.updatedAt) }}</div>
+              <div class="conversation-item-top">
+                <div class="conversation-item-main">
+                  <div class="conversation-item-title">{{ c.pinned ? '[顶] ' : '' }}{{ c.title }}</div>
+                  <div class="conversation-item-meta">{{ c.mode }} · {{ formatConversationTime(c.updatedAt) }}</div>
+                </div>
+                <div class="conversation-item-actions" @click.stop>
+                  <button class="conversation-menu-trigger" @click.stop="toggleConversationMenu(c.id)">···</button>
+                  <div class="conversation-menu" v-if="conversationMenuId === c.id">
+                    <button class="conversation-menu-item" @click="toggleConversationPinned(c)">{{ c.pinned ? '取消置顶' : '置顶' }}</button>
+                    <button class="conversation-menu-item" @click="renameConversation(c)">重命名</button>
+                    <button class="conversation-menu-item" @click="toggleConversationArchived(c)">{{ c.archived ? '取消存档' : '存档' }}</button>
+                    <button class="conversation-menu-item danger" @click="deleteConversation(c)">删除</button>
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="conversation-empty" v-if="filteredConversations.length===0">没有匹配的对话</div>
           </div>
@@ -320,24 +414,19 @@
       </div>
 
       <!-- 右侧：头像 + 公告 + 指令 -->
-  <div class="profile" :class="{ 'dock-bottom': dockEnabled && dockPos==='bottom' }">
+  <div class="profile">
 
   <!-- ✅ 头像（底边固定时，靠左固定） -->
-<div class="avatar"
-     :class="{ 'avatar-fixed': dockEnabled }"
-     :style="avatarStyle"></div>
 
   <!-- ✅ 展开按钮：放在头像上侧边沿 -->
-  <button class="profile-toggle"
-          :class="{ 'toggle-fixed': dockEnabled}"
+  <button class="profile-toggle toggle-fixed"
           @click="toggleProfilePanel()"
           title="展开/收起公告与指令">
     ☰
   </button>
 
   <!-- ✅ 抽屉：公告 + 指令（默认隐藏） -->
-  <div class="profile-panel"
-       :class="{ 'panel-fixed': dockEnabled }"
+  <div class="profile-panel panel-fixed"
        v-show="profilePanelOpen">
 
         <div class="notice">
@@ -464,6 +553,45 @@
     </div>
 
     <!-- 留言板遮罩 -->
+    <div v-if="classicDbOpen" class="modal-mask" @click.self="classicDbOpen=false">
+      <div class="modal modal-classic-db">
+        <div class="modal-header">
+          <div class="modal-title">经典版数据库</div>
+          <div class="classic-db-actions">
+            <button class="ui-mini" @click="loadClassicDb()">刷新</button>
+            <button class="x" @click="classicDbOpen=false">Ã—</button>
+          </div>
+        </div>
+        <div class="modal-body classic-db-body">
+          <div v-if="classicDbLoading" class="hint">加载中…</div>
+          <div v-else>
+            <div v-if="classicDbError" class="err">{{ classicDbError }}</div>
+            <div v-if="classicDbItems.length===0 && !classicDbError" class="hint">暂无经典问答数据</div>
+            <div v-for="item in classicDbItems" :key="'classic_' + item.id" class="classic-db-item">
+              <div class="classic-db-meta">
+                <span>#{{ item.id }}</span>
+                <span>{{ formatTime(item.created_at) }}</span>
+              </div>
+              <div class="field">
+                <div class="label">问</div>
+                <input v-model="item.q" type="text" />
+              </div>
+              <div class="field">
+                <div class="label">答</div>
+                <textarea v-model="item.a" class="classic-db-textarea"></textarea>
+              </div>
+              <div class="actions classic-db-item-actions">
+                <button class="primary" :disabled="classicDbSavingId===item.id" @click="saveClassicDbItem(item)">
+                  {{ classicDbSavingId===item.id ? '保存中…' : '保存修改' }}
+                </button>
+              </div>
+              <hr class="notice-hr" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div v-if="msgOpen" class="drawer-mask" @click="closeMessageBoard()"></div>
 
     <!-- 留言板抽屉 -->
@@ -508,6 +636,12 @@ import { Component, Vue } from 'vue-property-decorator';
 import Core from '../core';
 import axios from 'axios';
 
+const http = axios.create({
+  withCredentials: true,
+  timeout: 180000,
+  validateStatus: () => true,
+});
+
 const IMG_IDLE = require('./img/marisa_idle.jpg');
 const IMG_THINK = require('./img/marisa_think.jpg');
 const IMG_HAPPY = require('./img/marisa_happy.jpg');
@@ -521,7 +655,7 @@ const YOU: string = 'You';
 type AvatarKey = 'idle' | 'think' | 'happy' | 'sad' | 'teach' | 'error';
 type AvatarMode = 'cover' | 'contain' | 'fit-h' | 'fit-w' | 'tile' | 'pixel';
 
-@Component({})
+@Component
 export default class chatroom extends Vue {
   // 标准版对话
   talk_list: any[] = [];
@@ -535,12 +669,26 @@ export default class chatroom extends Vue {
 
 
   // 标准版会话记录（仿 ChatGPT）
-  panelHeight: number = 420;
+  panelHeight: number = 340;
   conversationSearch: string = '';
+  conversationShowArchived: boolean = false;
+  conversationMenuId: string = '';
   standardActiveConversationId: string = '';
   standardConversations: any[] = [];
+  conversationDrawerOpen: boolean = true;
   recommendedModes: string[] = ['聊天', '补习', '演绎', '调情'];
   private standardReplySeq: number = 0;
+  private conversationSyncTimer: number | null = null;
+  private eraActions: any[] = [
+    { key: 'talk', label: '对话', delta: { favor: 3, obedience: 1, shame: 0, desire: 0 } },
+    { key: 'tea', label: '泡茶', delta: { favor: 2, obedience: 2, shame: 0, desire: 0 } },
+    { key: 'play', label: '演奏', delta: { favor: 2, obedience: 0, shame: 1, desire: 0 } },
+    { key: 'touch', label: '接触', delta: { favor: 1, obedience: 0, shame: 2, desire: 3 } },
+    { key: 'study', label: '学习', delta: { favor: 1, obedience: 3, shame: 0, desire: 0 } },
+    { key: 'debug', label: '调试实验', delta: { favor: 0, obedience: 1, shame: 1, desire: 2 } },
+    { key: 'move', label: '移动', delta: { favor: 1, obedience: 0, shame: 0, desire: 0 } },
+    { key: 'custom', label: '自定义', delta: { favor: 0, obedience: 0, shame: 1, desire: 1 } },
+  ];
 
   // =========================
   // ✅ 标准版好感度显示状态
@@ -591,6 +739,11 @@ private profilePanelOpen: boolean = false; // 默认隐藏
   // 经典版 teach 状态（新增）
   classicTeachMode: boolean = false;
   classicTeachBuf: string[] = [];
+  classicDbOpen: boolean = false;
+  classicDbLoading: boolean = false;
+  classicDbError: string = '';
+  classicDbItems: any[] = [];
+  classicDbSavingId: number | null = null;
 
   avatarKey: AvatarKey = 'idle';
   avatarLocked: boolean = false;
@@ -673,16 +826,29 @@ private profilePanelOpen: boolean = false; // 默认隐藏
 
   get filteredConversations() {
     const keyword = (this.conversationSearch || '').toLowerCase();
-    if (!keyword) return this.standardConversations;
-    return this.standardConversations.filter((c: any) => {
+    const base = this.standardConversations.filter((c: any) => !!c && !!c.id && !!c.title && !!c.mode)
+      .filter((c: any) => !!c.archived === this.conversationShowArchived);
+    if (!keyword) return base;
+    return base.filter((c: any) => {
       const text = (c.title + ' ' + c.mode).toLowerCase();
       return text.indexOf(keyword) >= 0;
     });
   }
 
+  get isEraMode(): boolean {
+    return this.mode === 'standard' && this.getCurrentConversationMode() === '演绎';
+  }
+
+  get currentEraStats(): any {
+    const current = this.getStandardConversation(this.standardActiveConversationId);
+    return current && current.eraStats ? current.eraStats : this.defaultEraStats();
+  }
+
   get talkSlotStyle(): any {
     return {
-      height: this.panelHeight + 'px'
+      height: this.panelHeight + 'px',
+      width: '840px',
+      maxWidth: 'calc(100vw - 320px)'
     };
   }
   get inputPlaceholder(): string {
@@ -777,93 +943,27 @@ get rootStyle() {
   }
 
   get dockEnabled(): boolean {
-  return this.isDesktop;
-}
-
-get talkPanelClass(): any {
-  return {
-    'is-docked': this.dockEnabled,
-    'dock-left': this.dockPos === 'left',
-    'dock-right': this.dockPos === 'right',
-    'dock-bottom': this.dockPos === 'bottom',
-    'dock-center': this.dockPos === 'center',
-    'is-hidden': this.dockHidden,
-    'is-stealth': this.dockStealth
-  };
-}
-
-get dockHideText(): string {
-  if (this.dockPos === 'left') return '◀';
-  if (this.dockPos === 'right') return '▶';
-  if (this.dockPos === 'bottom') return '▼';
-  return '–';
-}
-
-get dockTabText(): string {
-  if (this.dockPos === 'left') return '▶';
-  if (this.dockPos === 'right') return '◀';
-  if (this.dockPos === 'bottom') return '▲';
-  return '展开';
-}
-
-get dockTabStyle(): any {
-  // 固定在对应边缘
-  if (this.dockPos === 'left') {
-    return { left: '6px', top: '50%', transform: 'translateY(-50%)' };
-  }
-  if (this.dockPos === 'right') {
-    return { right: '6px', top: '50%', transform: 'translateY(-50%)' };
-  }
-  if (this.dockPos === 'bottom') {
-    return { left: '50%', bottom: '6px', transform: 'translateX(-50%)' };
-  }
-  return {};
-}
-
-get talkPanelStyle(): any {
-  if (!this.dockEnabled) return { height: this.panelHeight + "px" };
-
-  var st: any = { position: 'fixed', zIndex: 9990, height: this.panelHeight + 'px' };
-
-  // 基础吸附位
-  if (this.dockPos === 'center') {
-    st.left = '50%';
-    st.top = '50%';
-    st.transform = 'translate(-50%,-50%)';
-} else if (this.dockPos === 'bottom') {
-  // ✅ bottom = 页面中间偏下（水平居中）
-  st.left = '50%';
-  st.bottom = '16px';
-  st.transform = 'translateX(-50%)';
-} else if (this.dockPos === 'left') {
-    st.left = '16px';
-    st.top = '50%';
-    st.transform = 'translateY(-50%)';
-  } else if (this.dockPos === 'right') {
-    st.right = '16px';
-    st.top = '50%';
-    st.transform = 'translateY(-50%)';
+    return this.isDesktop;
   }
 
-  // 拖拽偏移（拖的时候临时位移）
-  if (this.dragActive) {
-    st.transform = (st.transform || '') + ' translate(' + this.dragDx + 'px,' + this.dragDy + 'px)';
+  get talkPanelClass(): any {
+    return {
+      'is-docked': this.dockEnabled
+    };
   }
 
-  // 隐藏：把面板推到相邻边缘外侧，留 18px（同时禁用面板点击）
-  if (this.dockHidden && this.dockPos !== 'center') {
-    st.pointerEvents = 'none';
-    if (this.dockPos === 'left') {
-      st.transform = (st.transform || '') + ' translateX(calc(-100% + 18px))';
-    } else if (this.dockPos === 'right') {
-      st.transform = (st.transform || '') + ' translateX(calc(100% - 18px))';
-    } else if (this.dockPos === 'bottom') {
-      st.transform = (st.transform || '') + ' translateY(calc(100% - 18px))';
-    }
+  get talkPanelStyle(): any {
+    return {
+      position: this.isDesktop ? 'fixed' : 'relative',
+      zIndex: 9990,
+      height: this.panelHeight + 'px',
+      width: this.isDesktop ? '840px' : '100%',
+      maxWidth: this.isDesktop ? 'calc(100vw - 320px)' : '100%',
+      left: this.isDesktop ? '50%' : 'auto',
+      bottom: this.isDesktop ? '12px' : 'auto',
+      transform: this.isDesktop ? 'translateX(-50%)' : 'none'
+    };
   }
-
-  return st;
-}
 
   created() {
     this.loadAuthFromStorage();
@@ -881,6 +981,7 @@ mounted() {
   this.syncLateNightUnlockFromStorage();
   this.loadStandardAffinity();
   this.loadBgConfig();
+  if (this.isLoggedIn) this.loadConversationsFromServer(true);
 
   // ✅ 关键：首次进入就计算一次 desktop
   this.isDesktop = window.innerWidth > 900;
@@ -890,23 +991,28 @@ mounted() {
     this.dockPos = 'bottom';
     this.dockHidden = false;
     this.dockStealth = false;
+    this.conversationDrawerOpen = false;
   } else {
     // 移动端不启用浮动 dock
     this.dockPos = 'center';
     this.dockHidden = false;
     this.dockStealth = false;
+    this.conversationDrawerOpen = true;
   }
 
   // resize：实时切换 desktop/移动端策略
   this._winResize = () => {
+    const wasDesktop = this.isDesktop;
     this.isDesktop = window.innerWidth > 900;
     if (!this.isDesktop) {
       this.dockPos = 'center';
       this.dockHidden = false;
       this.dockStealth = false;
+      if (wasDesktop) this.conversationDrawerOpen = true;
     } else {
       // 从移动端切回桌面端：回到底部（或你也可以保留上次位置）
       if (this.dockPos === 'center') this.dockPos = 'bottom';
+      this.conversationDrawerOpen = false;
     }
   };
   window.addEventListener('resize', this._winResize);
@@ -926,6 +1032,7 @@ mounted() {
 
 beforeDestroy() {
   if (this.statsTimer) window.clearInterval(this.statsTimer);
+  if (this.conversationSyncTimer) window.clearTimeout(this.conversationSyncTimer);
   if (this._winResize) window.removeEventListener('resize', this._winResize);
   if (this._winKey) window.removeEventListener('keydown', this._winKey);
 }
@@ -933,6 +1040,7 @@ beforeDestroy() {
   updated() {
     this._scrollBottom();
     this.saveConversationsToStorage();
+    this.scheduleConversationSync();
   }
 
 private hideDock() {
@@ -1039,6 +1147,14 @@ private toggleProfilePanel() {
   this.profilePanelOpen = !this.profilePanelOpen;
 }
 
+private toggleConversationDrawer() {
+  this.conversationDrawerOpen = !this.conversationDrawerOpen;
+}
+
+private closeConversationDrawer() {
+  this.conversationDrawerOpen = false;
+}
+
   private onAvatarModePick() {
     this.avatarLocked = true;
   }
@@ -1131,19 +1247,25 @@ private async loadStandardAffinity() {
   private async apiGet(path: string) {
     const headers: any = {};
     if (this.isLoggedIn) headers['Authorization'] = 'Bearer ' + this.auth.token;
-    return axios.get('/api' + path, { headers: headers });
+    return http.get('/api' + path, { headers: headers });
   }
 
   private async apiPost(path: string, data: any) {
     const headers: any = {};
     if (this.isLoggedIn) headers['Authorization'] = 'Bearer ' + this.auth.token;
-    return axios.post('/api' + path, data, { headers: headers });
+    return http.post('/api' + path, data, { headers: headers });
+  }
+
+  private async apiPut(path: string, data: any) {
+    const headers: any = {};
+    if (this.isLoggedIn) headers['Authorization'] = 'Bearer ' + this.auth.token;
+    return http.put('/api' + path, data, { headers: headers });
   }
 
   private async apiDelete(path: string) {
     const headers: any = {};
     if (this.isLoggedIn) headers['Authorization'] = 'Bearer ' + this.auth.token;
-    return axios.delete('/api' + path, { headers: headers });
+    return http.delete('/api' + path, { headers: headers });
   }
 
   private pickErr(resp: any, fallback: string): string {
@@ -1208,6 +1330,7 @@ private async loadStandardAffinity() {
 
       // ✅ 登录成功：刷新标准版好感度
       this.loadStandardAffinity();
+      await this.loadConversationsFromServer(true);
 
       // 登录成功：如果当前想用自设版，则切过去并加载 persona
       if (this.mode === 'custom') {
@@ -1248,6 +1371,7 @@ private async loadStandardAffinity() {
     this.mode = 'standard';
     this.selectedPersonaId = null;
     this.personas = [];
+    this.loadConversationsFromStorage();
   }
 
   // ===== 留言板 =====
@@ -1485,6 +1609,10 @@ if (this.tryHandleUiCommand(_content)) {
 
   // 标准版：保留 status，其它走默认 reply；teach/forget 在标准版不启用
   private _marisaThinkingStandard(_content: string, conversationId: string) {
+    if (this.getCurrentConversationMode(conversationId) === '演绎') {
+      this.appendStandardMessage(conversationId, Core.speak(MARISA, '「演绎」模式请使用下方选项操作，文本输入已暂时关闭。'));
+      return;
+    }
     if (_content === 'status') { this._marisaStatus(conversationId); return; }
 
     // 标准版：不使用 teach/forget
@@ -1572,10 +1700,18 @@ if (this.tryHandleUiCommand(_content)) {
         const ans = res.data.data.answer;
         this.classic_talk_list.push(Core.speak(MARISA, ans));
         this.setAvatar(this.detectAvatarFromReply(ans), 2500);
-      } else {
-        this.classic_talk_list.push(Core.speak(MARISA, '（经典版）我没听懂…你教教我吧？teach！'));
-        this.setAvatar('think', 1500);
+        return;
       }
+
+      if (res && res.data && res.data.data && typeof res.data.data.answer === 'string') {
+        const hint = res.data.data.answer;
+        this.classic_talk_list.push(Core.speak(MARISA, hint));
+        this.setAvatar(this.detectAvatarFromReply(hint), 2200);
+        return;
+      }
+
+      this.classic_talk_list.push(Core.speak(MARISA, '（经典版）我没听懂…你教教我吧？teach！'));
+      this.setAvatar('think', 1500);
     } catch (e) {
       this.classic_talk_list.push(Core.speak(MARISA, '（经典版）网络错误…'));
       this.setAvatar('error', 2500);
@@ -1591,6 +1727,60 @@ if (this.tryHandleUiCommand(_content)) {
       }
     } catch (e) {
       this.classic_talk_list.push(Core.speak(MARISA, '（经典版）查不到脑重量…'));
+    }
+  }
+
+  private async openClassicDb() {
+    this.classicDbOpen = true;
+    await this.loadClassicDb();
+  }
+
+  private async loadClassicDb() {
+    this.classicDbLoading = true;
+    this.classicDbError = '';
+    try {
+      const res: any = await this.apiGet('/classic/list?limit=200');
+      if (!res || !res.data || res.data.code !== 200 || !Array.isArray(res.data.data)) {
+        this.classicDbError = this.pickErr(res, '加载经典版数据库失败');
+        return;
+      }
+      this.classicDbItems = res.data.data.map((item: any) => ({
+        id: Number(item.id || 0),
+        q: item.q || '',
+        a: item.a || '',
+        created_at: Number(item.created_at || 0)
+      }));
+    } catch (e) {
+      this.classicDbError = '加载经典版数据库失败';
+    } finally {
+      this.classicDbLoading = false;
+    }
+  }
+
+  private async saveClassicDbItem(item: any) {
+    const id = Number(item && item.id);
+    const q = String(item && item.q || '').trim();
+    const a = String(item && item.a || '').trim();
+    if (!id) return;
+    if (!q || !a) {
+      this.classicDbError = '问和答都不能为空';
+      return;
+    }
+
+    this.classicDbSavingId = id;
+    this.classicDbError = '';
+    try {
+      const res: any = await this.apiPut('/classic/' + id, { keyword: q, answer: a });
+      if (!res || !res.data || res.data.code !== 200) {
+        this.classicDbError = this.pickErr(res, '保存经典版数据库失败');
+        return;
+      }
+      this.classic_talk_list.push(Core.speak(MARISA, `（经典版）已更新第 ${id} 条问答。`));
+      await this.loadClassicDb();
+    } catch (e) {
+      this.classicDbError = '保存经典版数据库失败';
+    } finally {
+      this.classicDbSavingId = null;
     }
   }
 
@@ -1902,11 +2092,14 @@ private nextBg() {
     try {
       const raw = localStorage.getItem('wm_standard_conversations') || '[]';
       const list = JSON.parse(raw);
-      if (Array.isArray(list)) this.standardConversations = list;
+      if (Array.isArray(list)) {
+        this.standardConversations = list.map((c: any) => this.normalizeConversation(c)).filter((c: any) => !!c);
+      }
     } catch (e) {
       this.standardConversations = [];
     }
 
+    this.sortStandardConversations();
     if (this.standardConversations.length > 0) {
       this.selectConversation(this.standardConversations[0].id);
     } else {
@@ -1916,8 +2109,127 @@ private nextBg() {
   }
 
   private saveConversationsToStorage() {
+    if (this.isLoggedIn) return;
     if (!Array.isArray(this.standardConversations)) return;
     localStorage.setItem('wm_standard_conversations', JSON.stringify(this.standardConversations));
+  }
+
+  private async loadConversationsFromServer(mergeGuest: boolean = false) {
+    if (!this.isLoggedIn) return;
+    const guestList = mergeGuest ? this.standardConversations.slice() : [];
+    try {
+      const res: any = await this.apiGet('/conversations');
+      if (!res || !res.data || res.data.code !== 200 || !Array.isArray(res.data.data)) return;
+      const remoteList = res.data.data.map((c: any) => this.normalizeConversation(c)).filter((c: any) => !!c);
+      const merged = mergeGuest ? this.mergeConversationLists(remoteList, guestList) : remoteList;
+      this.standardConversations = merged;
+      this.sortStandardConversations();
+      if (merged.length > 0) {
+        const nextId = this.getStandardConversation(this.standardActiveConversationId) ? this.standardActiveConversationId : merged[0].id;
+        this.selectConversation(nextId);
+      } else {
+        this.standardActiveConversationId = '';
+        this.talk_list = [];
+      }
+      if (mergeGuest && guestList.length > 0) {
+        localStorage.removeItem('wm_standard_conversations');
+        await this.syncConversationsToServer();
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  private scheduleConversationSync() {
+    if (!this.isLoggedIn) return;
+    if (this.conversationSyncTimer) window.clearTimeout(this.conversationSyncTimer);
+    this.conversationSyncTimer = window.setTimeout(() => {
+      this.syncConversationsToServer();
+    }, 400);
+  }
+
+  private async syncConversationsToServer() {
+    if (!this.isLoggedIn) return;
+    try {
+      await this.apiPut('/conversations', {
+        conversations: this.standardConversations.map((c: any) => this.serializeConversation(c))
+      });
+    } catch (e) { /* ignore */ }
+  }
+
+  private normalizeConversation(raw: any): any {
+    if (!raw || !raw.id) return null;
+    return {
+      id: String(raw.id),
+      title: (raw.title || '未命名对话').trim(),
+      mode: (raw.mode || '聊天').trim(),
+      archived: !!raw.archived,
+      pinned: !!raw.pinned,
+      createdAt: Number(raw.createdAt || Date.now()),
+      updatedAt: Number(raw.updatedAt || raw.createdAt || Date.now()),
+      eraStats: this.normalizeEraStats(raw.eraStats),
+      messages: Array.isArray(raw.messages) ? raw.messages.slice() : [],
+    };
+  }
+
+  private serializeConversation(raw: any): any {
+    const item = this.normalizeConversation(raw);
+    if (!item) return null;
+    return {
+      id: item.id,
+      title: item.title,
+      mode: item.mode,
+      archived: item.archived,
+      pinned: item.pinned,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      eraStats: this.normalizeEraStats(item.eraStats),
+      messages: item.messages,
+    };
+  }
+
+  private defaultEraStats(): any {
+    return {
+      favor: 10,
+      obedience: 0,
+      shame: 0,
+      desire: 0,
+    };
+  }
+
+  private normalizeEraStats(raw: any): any {
+    const base = this.defaultEraStats();
+    if (!raw || typeof raw !== 'object') return base;
+    return {
+      favor: Number(raw.favor || base.favor),
+      obedience: Number(raw.obedience || base.obedience),
+      shame: Number(raw.shame || base.shame),
+      desire: Number(raw.desire || base.desire),
+    };
+  }
+
+  private mergeConversationLists(left: any[], right: any[]) {
+    const map: any = {};
+    const pick = (item: any) => {
+      const conv = this.normalizeConversation(item);
+      if (!conv) return;
+      const prev = map[conv.id];
+      if (!prev || Number(conv.updatedAt || 0) >= Number(prev.updatedAt || 0)) {
+        map[conv.id] = conv;
+      }
+    };
+    left.forEach(pick);
+    right.forEach(pick);
+    const out = Object.keys(map).map((k: string) => map[k]);
+    return out.sort((a: any, b: any) => {
+      if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+      return Number(b.updatedAt || 0) - Number(a.updatedAt || 0);
+    });
+  }
+
+  private sortStandardConversations() {
+    this.standardConversations = this.standardConversations.slice().sort((a: any, b: any) => {
+      if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+      return Number(b.updatedAt || 0) - Number(a.updatedAt || 0);
+    });
   }
 
   private createConversation(modeLabel: string = '聊天'): string {
@@ -1927,25 +2239,116 @@ private nextBg() {
       id,
       title: modeLabel + '对话 ' + (this.standardConversations.length + 1),
       mode: modeLabel,
+      archived: false,
+      pinned: false,
+      eraStats: modeLabel === '演绎' ? this.defaultEraStats() : this.defaultEraStats(),
       messages: [] as any[],
       createdAt: now,
       updatedAt: now,
     };
     this.standardConversations.unshift(item);
+    this.conversationShowArchived = false;
+    this.conversationMenuId = '';
+    this.sortStandardConversations();
     this.selectConversation(id);
-    this.appendStandardMessage(id, Core.speak(MARISA, '已进入「' + modeLabel + '」模式，来聊天吧～'));
+    if (modeLabel === '演绎') {
+      this.appendStandardMessage(id, Core.speak(MARISA, '已进入「演绎」模式。正在开发，敬请期待。现在可以先通过下方选项体验状态栏原型。'));
+    } else {
+      this.appendStandardMessage(id, Core.speak(MARISA, '已进入「' + modeLabel + '」模式，来聊天吧～'));
+    }
     this.bumpConversationUpdatedAt(id);
     return id;
   }
 
   private selectConversation(id: string) {
+    this.conversationMenuId = '';
     this.standardActiveConversationId = id;
     const current = this.getStandardConversation(id);
     this.talk_list = current ? current.messages.slice() : [];
+    if (!this.isDesktop) this.closeConversationDrawer();
   }
 
   private quickStartConversation(modeLabel: string) {
     this.createConversation(modeLabel);
+  }
+
+  private chooseEraAction(action: any) {
+    const conversationId = this.ensureStandardConversation('演绎');
+    const current = this.getStandardConversation(conversationId);
+    if (!current) return;
+
+    current.mode = '演绎';
+    current.eraStats = this.normalizeEraStats(current.eraStats);
+    this.appendStandardMessage(conversationId, Core.speak(YOU, '【选项】' + action.label));
+
+    const stats = current.eraStats;
+    stats.favor = Math.min(100, stats.favor + Number(action.delta.favor || 0));
+    stats.obedience = Math.min(100, stats.obedience + Number(action.delta.obedience || 0));
+    stats.shame = Math.min(100, stats.shame + Number(action.delta.shame || 0));
+    stats.desire = Math.min(100, stats.desire + Number(action.delta.desire || 0));
+
+    this.appendStandardMessage(
+      conversationId,
+      Core.speak(MARISA, '正在开发，敬请期待。未来这里会替换为独立口上、选项分支与多结局演绎内容。')
+    );
+    this.setAvatar('think', 1800);
+    this.bumpConversationUpdatedAt(conversationId);
+  }
+
+  private toggleConversationMenu(id: string) {
+    this.conversationMenuId = this.conversationMenuId === id ? '' : id;
+  }
+
+  private renameConversation(c: any) {
+    const current = this.getStandardConversation(c.id);
+    if (!current) return;
+    const next = window.prompt('输入新的对话名称', current.title);
+    if (next === null) return;
+    const title = next.trim();
+    if (!title) return;
+    current.title = title;
+    this.conversationMenuId = '';
+    this.bumpConversationUpdatedAt(current.id);
+  }
+
+  private toggleConversationPinned(c: any) {
+    const current = this.getStandardConversation(c.id);
+    if (!current) return;
+    current.pinned = !current.pinned;
+    this.conversationMenuId = '';
+    this.bumpConversationUpdatedAt(current.id);
+  }
+
+  private toggleConversationArchived(c: any) {
+    const current = this.getStandardConversation(c.id);
+    if (!current) return;
+    current.archived = !current.archived;
+    this.conversationMenuId = '';
+    this.bumpConversationUpdatedAt(current.id);
+    if (current.archived && !this.conversationShowArchived) {
+      const next = this.standardConversations.find((item: any) => !item.archived && item.id !== current.id);
+      if (next) this.selectConversation(next.id);
+      else {
+        this.standardActiveConversationId = '';
+        this.talk_list = [];
+      }
+    }
+  }
+
+  private deleteConversation(c: any) {
+    const current = this.getStandardConversation(c.id);
+    if (!current) return;
+    if (!window.confirm('确定删除「' + current.title + '」吗？删除后不可恢复。')) return;
+    this.conversationMenuId = '';
+    this.standardConversations = this.standardConversations.filter((item: any) => item.id !== current.id);
+    if (this.standardActiveConversationId === current.id) {
+      const visible = this.filteredConversations;
+      if (visible.length > 0) this.selectConversation(visible[0].id);
+      else {
+        this.standardActiveConversationId = '';
+        this.talk_list = [];
+      }
+    }
   }
 
   private formatConversationTime(ts: number) {
@@ -1965,6 +2368,7 @@ private nextBg() {
   private formatStandardPrompt(raw: string, conversationId?: string): string {
     const m = this.getCurrentConversationMode(conversationId);
     if (m === '聊天') return raw;
+    if (m === '演绎') return '【演绎模式】' + raw;
     return '【' + m + '模式】' + raw;
   }
 
@@ -1974,7 +2378,7 @@ private nextBg() {
     const current = this.getStandardConversation(targetId);
     if (!current) return;
     current.updatedAt = Date.now();
-    this.standardConversations = this.standardConversations.slice().sort((a: any, b: any) => b.updatedAt - a.updatedAt);
+    this.sortStandardConversations();
   }
 
   private getStandardConversation(id: string): any {
@@ -2053,12 +2457,71 @@ private nextBg() {
 .affinity-right
   opacity 0.85
 
+.era-status
+  margin 8px 10px
+  padding 12px
+  border-radius 14px
+  background linear-gradient(135deg, rgba(255,248,230,.92), rgba(255,233,233,.88))
+  border 1px solid rgba(180,120,120,.18)
+
+.era-status-header
+  display flex
+  justify-content space-between
+  align-items baseline
+  gap 10px
+  margin-bottom 10px
+  flex-wrap wrap
+
+.era-status-title
+  font-size 13px
+  font-weight 800
+  color rgba(95,55,55,1)
+
+.era-status-subtitle
+  font-size 11px
+  color rgba(110,80,80,.72)
+
+.era-status-grid
+  display grid
+  grid-template-columns repeat(2, minmax(0, 1fr))
+  gap 10px
+
+.era-stat
+  padding 10px
+  border-radius 12px
+  background rgba(255,255,255,.62)
+  border 1px solid rgba(255,255,255,.55)
+
+.era-stat-meta
+  display flex
+  justify-content space-between
+  align-items center
+  margin-bottom 6px
+  font-size 12px
+  color rgba(90,60,60,.88)
+
+.era-stat-bar
+  height 8px
+  border-radius 999px
+  background rgba(160,120,120,.14)
+  overflow hidden
+
+.era-stat-fill
+  height 100%
+  border-radius 999px
+  background linear-gradient(90deg, rgba(222,141,141,.88), rgba(226,182,122,.92))
+
 
 .panel-resize
   display flex
   align-items center
   gap 8px
   margin 8px 10px 0
+
+.classic-db-toolbar
+  padding 8px 10px 0
+  display flex
+  justify-content flex-start
   font-size 12px
 
 .panel-resize input[type='range']
@@ -2095,6 +2558,13 @@ private nextBg() {
   cursor pointer
   font-size 12px
   font-weight 700
+  transition background .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease
+
+.mode-recommend-item:hover
+  background rgba(90,145,255,.95)
+  color #fff
+  box-shadow 0 10px 20px rgba(55,105,210,.18)
+  transform translateY(-1px)
 
 .chat-main
   flex 1
@@ -2112,6 +2582,51 @@ private nextBg() {
   flex-direction column
   gap 10px
 
+.mobile-conversation-mask
+  position fixed
+  inset 0
+  background rgba(10,18,30,.28)
+  z-index 9992
+
+.mobile-conversation-drawer
+  position fixed
+  top 0
+  left 0
+  width min(86vw, 340px)
+  height 100vh
+  background linear-gradient(180deg, rgba(250,252,255,.98), rgba(236,244,255,.96))
+  box-shadow 18px 0 38px rgba(14,32,64,.18)
+  transform translateX(-104%)
+  transition transform .22s ease
+  z-index 9993
+  display flex
+  flex-direction column
+
+.mobile-conversation-drawer.open
+  transform translateX(0)
+
+.mobile-conversation-drawer-header
+  display flex
+  align-items center
+  justify-content space-between
+  gap 10px
+  padding 12px
+  border-bottom 1px solid rgba(0,0,0,.08)
+
+.mobile-conversation-drawer-title
+  font-size 14px
+  font-weight 800
+  color rgba(0,0,0,.78)
+
+.mobile-standard-sidecar
+  position static
+  width 100%
+  height auto
+  min-height 0
+  flex 1
+  padding 12px
+  overflow hidden
+
 .conversation-panel
   flex 1
   border 1px solid rgba(0,0,0,.12)
@@ -2127,6 +2642,11 @@ private nextBg() {
   display flex
   flex-direction column
   gap 8px
+
+.conversation-toolbar
+  display flex
+  gap 8px
+  flex-wrap wrap
 
 .conversation-search
   width 100%
@@ -2154,6 +2674,70 @@ private nextBg() {
   border-color rgba(60,120,255,.35)
   background rgba(210,235,255,.85)
 
+.conversation-item-top
+  display flex
+  gap 8px
+  justify-content space-between
+  align-items flex-start
+
+.conversation-item-main
+  min-width 0
+  flex 1
+
+.conversation-item-actions
+  position relative
+  display flex
+  justify-content flex-end
+
+.conversation-menu-trigger
+  width 30px
+  height 30px
+  border none
+  border-radius 10px
+  background rgba(255,255,255,.82)
+  border 1px solid rgba(0,0,0,.1)
+  color rgba(0,0,0,.72)
+  cursor pointer
+  transition background .16s ease, transform .16s ease, box-shadow .16s ease
+
+.conversation-menu-trigger:hover
+  background rgba(210,225,255,.96)
+  box-shadow 0 10px 20px rgba(40,90,180,.15)
+  transform translateY(-1px)
+
+.conversation-menu
+  position absolute
+  right 0
+  top calc(100% + 6px)
+  min-width 126px
+  padding 6px
+  border-radius 12px
+  border 1px solid rgba(0,0,0,.1)
+  background rgba(255,255,255,.96)
+  box-shadow 0 14px 28px rgba(0,0,0,.14)
+  display flex
+  flex-direction column
+  gap 4px
+  z-index 12
+
+.conversation-menu-item
+  border none
+  border-radius 8px
+  padding 8px 10px
+  text-align left
+  background transparent
+  color rgba(0,0,0,.78)
+  cursor pointer
+  transition background .16s ease, color .16s ease
+
+.conversation-menu-item:hover
+  background rgba(220,235,255,.9)
+  color rgba(30,90,210,1)
+
+.conversation-menu-item.danger:hover
+  background rgba(255,232,232,.95)
+  color rgba(200,40,40,1)
+
 .conversation-item-title
   font-size 12px
   font-weight 800
@@ -2174,6 +2758,31 @@ private nextBg() {
 
 .talk-content .talk-place
   width 100%
+
+.era-actions
+  display flex
+  flex-wrap wrap
+  gap 10px
+  padding 10px
+  border-top 1px solid rgba(0,0,0,.08)
+  background rgba(255,248,242,.82)
+
+.era-action-btn
+  padding 8px 14px
+  border none
+  border-radius 999px
+  background linear-gradient(135deg, rgba(255,233,214,.96), rgba(255,219,226,.96))
+  border 1px solid rgba(185,120,120,.22)
+  color rgba(124,62,62,1)
+  cursor pointer
+  font-size 12px
+  font-weight 700
+  transition transform .16s ease, box-shadow .16s ease, filter .16s ease
+
+.era-action-btn:hover
+  filter brightness(.96)
+  box-shadow 0 12px 24px rgba(180,120,120,.18)
+  transform translateY(-1px)
 
 /* 左侧人格面板 */
 .persona-panel
@@ -2259,10 +2868,17 @@ private nextBg() {
   font-size 12px
   font-weight 800
   color rgba(30,90,210,1)
+  transition background .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease
 
 .mode-btn.on
   background rgba(60,120,255,.85)
   color #fff
+
+.mode-btn:hover:not(:disabled)
+  background rgba(95,145,255,.95)
+  color #fff
+  box-shadow 0 10px 20px rgba(55,105,210,.22)
+  transform translateY(-1px)
 
 .mode-btn:disabled
   opacity .4
@@ -2304,14 +2920,30 @@ private nextBg() {
   cursor pointer
   font-size 12px
   font-weight 700
+  transition background .16s ease, color .16s ease, border-color .16s ease, transform .16s ease, box-shadow .16s ease
 
 .mini-btn:hover
-  background rgba(220,235,255,1)
+  background rgba(120,165,255,.96)
+  border-color rgba(60,120,255,.62)
+  color #fff
+  box-shadow 0 10px 22px rgba(55,105,210,.22)
+  transform translateY(-1px)
+
+.mini-btn.active
+  background rgba(60,120,255,.92)
+  border-color rgba(60,120,255,.72)
+  color #fff
 
 .mini-btn.danger
   border-color rgba(255,80,80,.35)
   background rgba(255,230,230,.85)
   color rgba(200,40,40,1)
+
+.mini-btn.danger:hover
+  background rgba(240,84,84,.92)
+  border-color rgba(220,55,55,.62)
+  color #fff
+  box-shadow 0 10px 22px rgba(210,70,70,.18)
 
 .login-badge
   font-size 12px
@@ -2347,9 +2979,22 @@ private nextBg() {
   background rgba(255,255,255,.85)
   cursor pointer
   font-size 12px
+  transition background .16s ease, color .16s ease, border-color .16s ease, transform .16s ease, box-shadow .16s ease
+
+.ui-mini:hover
+  background rgba(220,235,255,.96)
+  border-color rgba(60,120,255,.35)
+  color rgba(30,90,210,1)
+  box-shadow 0 8px 16px rgba(55,105,210,.14)
+  transform translateY(-1px)
 
 .ui-mini.danger
   border-color rgba(255,80,80,.35)
+  color rgba(200,40,40,1)
+
+.ui-mini.danger:hover
+  background rgba(255,232,232,.95)
+  border-color rgba(220,55,55,.5)
   color rgba(200,40,40,1)
 
 .ui-check
@@ -2409,6 +3054,13 @@ private nextBg() {
   width 720px
   max-width 92vw
 
+.modal-classic-db
+  width 860px
+  max-width 94vw
+  max-height 86vh
+  display flex
+  flex-direction column
+
 .modal-header
   display flex
   justify-content space-between
@@ -2429,6 +3081,39 @@ private nextBg() {
 .modal-body
   padding 12px
 
+.classic-db-actions
+  display flex
+  align-items center
+  gap 8px
+
+.classic-db-body
+  overflow auto
+  min-height 0
+
+.classic-db-item
+  padding 6px 2px
+
+.classic-db-meta
+  display flex
+  justify-content space-between
+  gap 10px
+  font-size 12px
+  color rgba(0,0,0,.68)
+
+.classic-db-textarea
+  width 100%
+  min-height 96px
+  resize vertical
+  padding 8px
+  border-radius 10px
+  border 1px solid rgba(0,0,0,.12)
+  background rgba(255,255,255,.85)
+  color rgba(0,0,0,.85)
+  outline none
+
+.classic-db-item-actions
+  margin-top 6px
+
 .tabs
   display flex
   gap 8px
@@ -2441,11 +3126,18 @@ private nextBg() {
   color rgba(0,0,0,.75)
   cursor pointer
   font-size 12px
+  transition background .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease
 
 .tab.on
   background rgba(210,235,255,.9)
   border-color rgba(60,120,255,.35)
   color rgba(30,90,210,1)
+
+.tab:hover
+  background rgba(220,235,255,.96)
+  color rgba(30,90,210,1)
+  box-shadow 0 8px 16px rgba(55,105,210,.12)
+  transform translateY(-1px)
 
 .field
   margin 10px 0
@@ -2487,6 +3179,13 @@ private nextBg() {
   color rgba(30,90,210,1)
   cursor pointer
   font-weight 700
+  transition background .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease
+
+.primary:hover:not(:disabled)
+  background rgba(90,145,255,.95)
+  color #fff
+  box-shadow 0 10px 22px rgba(55,105,210,.22)
+  transform translateY(-1px)
 
 .primary:disabled
   opacity .5
@@ -2665,6 +3364,9 @@ private nextBg() {
   .affinity-bar
     margin 8px 0
 
+  .era-status-grid
+    grid-template-columns 1fr
+
   .talk-place
     max-height: 55vh
     overflow-y: auto
@@ -2672,6 +3374,14 @@ private nextBg() {
 
   .standard-sidecar
     display none
+
+  .mobile-standard-sidecar
+    display flex
+    gap 10px
+
+  .mobile-conversation-drawer
+    width min(88vw, 360px)
+    max-width calc(100vw - 24px)
 
   .panel-resize
     margin 8px 0 0
@@ -2700,6 +3410,13 @@ private nextBg() {
     height: 220px !important
     background-position: center !important
     margin-bottom: 10px
+
+  .avatar.avatar-fixed,
+  .profile-toggle.toggle-fixed,
+  .profile-panel.panel-fixed
+    position static !important
+    left auto !important
+    bottom auto !important
 
   .notice, .cmd
     width: 100% !important
@@ -2732,9 +3449,9 @@ private nextBg() {
 /* ✅ 默认（桌面）对话框占位：700，但不会超过视口 */
 .talk-slot
   position relative
-  width 700px
-  height 500px
-  max-width calc(100vw - 24px)
+  width 840px
+  height 420px
+  max-width calc(100vw - 320px)
   margin 0 auto
 
 /* ✅ 文字强制换行，防止长串把布局撑爆 */
@@ -2894,8 +3611,8 @@ private nextBg() {
 /* ✅ 头像固定在：对话框(bottom居中)的左侧，并贴住底边 */
 .avatar.avatar-fixed
   position fixed
-  left calc(50% - 608px)
-  bottom 16px
+  left calc(50% - 700px)
+  bottom 12px
   z-index 9992
 
 .profile-toggle
@@ -2910,14 +3627,14 @@ private nextBg() {
 
 .profile-toggle.toggle-fixed
   position fixed
-  left calc(50% - 608px)
-  bottom calc(16px + 250px - 14px)
+  left calc(50% - 700px)
+  bottom calc(12px + 250px - 14px)
   z-index 9993
 
 .profile-panel.panel-fixed
   position fixed
-  left calc(50% - 608px)
-  bottom calc(16px + 250px + 10px)
+  left calc(50% - 700px)
+  bottom calc(12px + 250px + 10px)
   width 250px
   z-index 9992
 
@@ -2950,6 +3667,13 @@ private nextBg() {
   font-size 12px
   font-weight 800
   color rgba(30,90,210,1)
+  transition background .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease
+
+.bg-jump:hover
+  background rgba(95,145,255,.95)
+  color #fff
+  box-shadow 0 10px 20px rgba(55,105,210,.18)
+  transform translateY(-1px)
 
 .bg-jump.on
   background rgba(60,120,255,.85)

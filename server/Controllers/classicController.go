@@ -99,6 +99,28 @@ func ClassicTeach(ctx iris.Context) ModelAndView {
 	return ModelAndView{Code: 200, Data: map[string]interface{}{"ok": true, "id": id}}
 }
 
+func ClassicUpdate(ctx iris.Context) ModelAndView {
+	Services.IncRequest()
+
+	id, err := ctx.Params().GetInt64("id")
+	if err != nil || id <= 0 {
+		return ModelAndView{Code: 400, Data: map[string]interface{}{"error": "invalid id"}}
+	}
+
+	r := readClassicReq(ctx)
+	q := strings.TrimSpace(r.Keyword)
+	a := strings.TrimSpace(r.Answer)
+	if q == "" || a == "" {
+		return ModelAndView{Code: 400, Data: map[string]interface{}{"error": "need keyword and answer"}}
+	}
+
+	ok, err := Services.ClassicUpdateQA(id, q, a)
+	if err != nil {
+		return ModelAndView{Code: 400, Data: map[string]interface{}{"error": err.Error()}}
+	}
+	return ModelAndView{Code: 200, Data: map[string]interface{}{"ok": ok}}
+}
+
 func ClassicForget(ctx iris.Context) ModelAndView {
 	Services.IncRequest()
 

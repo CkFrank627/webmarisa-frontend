@@ -16,6 +16,19 @@ func appInit() error {
 	}
 
 	schema := `
+CREATE TABLE IF NOT EXISTS app_input_audit(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  username TEXT NOT NULL,
+  method TEXT NOT NULL,
+  path TEXT NOT NULL,
+  content_type TEXT NOT NULL,
+  raw_body TEXT NOT NULL,
+  content TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_input_audit_user_time ON app_input_audit(user_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS app_stats(
   key TEXT PRIMARY KEY,
   val INTEGER NOT NULL
@@ -65,6 +78,21 @@ CREATE TABLE IF NOT EXISTS app_persona_teach(
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_teach_persona ON app_persona_teach(persona_id);
+
+CREATE TABLE IF NOT EXISTS app_conversations(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  client_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  archived INTEGER NOT NULL DEFAULT 0,
+  pinned INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  messages_json TEXT NOT NULL DEFAULT '[]'
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_conv_user_client ON app_conversations(user_id, client_id);
+CREATE INDEX IF NOT EXISTS idx_conv_user_archived ON app_conversations(user_id, archived, pinned DESC, updated_at DESC);
 
 
 INSERT OR IGNORE INTO app_stats(key, val) VALUES ('total_requests', 0);

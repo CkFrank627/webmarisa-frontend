@@ -1,4 +1,4 @@
-//classic_store.go
+// classic_store.go
 package Services
 
 import (
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -44,7 +45,7 @@ func classicInit() error {
 	}
 	db.SetMaxOpenConns(1)
 
-	schema := `
+	createTableSQL := `
 CREATE TABLE IF NOT EXISTS classic_qa(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   q TEXT NOT NULL,
@@ -53,19 +54,16 @@ CREATE TABLE IF NOT EXISTS classic_qa(
   q_tokens TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL DEFAULT 0
-);
-CREATE INDEX IF NOT EXISTS idx_classic_qnorm ON classic_qa(q_norm);
-CREATE INDEX IF NOT EXISTS idx_classic_updated ON classic_qa(updated_at DESC, id DESC);
-`
-	if _, err := db.Exec(schema); err != nil {
+);`
+	if _, err := db.Exec(createTableSQL); err != nil {
 		return err
 	}
 
-	// 兼容旧表
-	if err := classicEnsureColumn(db, `ALTER TABLE classic_qa ADD COLUMN q_tokens TEXT NOT NULL DEFAULT ''`); err != nil {
+	// 兼容旧表：先补列，再做依赖 updated_at 的回填和索引。
+	if err := classicEnsureColumn(db, "classic_qa", "q_tokens", `ALTER TABLE classic_qa ADD COLUMN q_tokens TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
-	if err := classicEnsureColumn(db, `ALTER TABLE classic_qa ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0`); err != nil {
+	if err := classicEnsureColumn(db, "classic_qa", "updated_at", `ALTER TABLE classic_qa ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0`); err != nil {
 		return err
 	}
 
@@ -75,21 +73,53 @@ CREATE INDEX IF NOT EXISTS idx_classic_updated ON classic_qa(updated_at DESC, id
 	if _, err := db.Exec(`UPDATE classic_qa SET q_tokens = q_norm WHERE q_tokens = ''`); err != nil {
 		return err
 	}
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_classic_qnorm ON classic_qa(q_norm)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_classic_updated ON classic_qa(updated_at DESC, id DESC)`); err != nil {
+		return err
+	}
 
 	classicDB = db
 	return nil
 }
 
-func classicEnsureColumn(db *sql.DB, ddl string) error {
-	_, err := db.Exec(ddl)
-	if err == nil {
+func classicEnsureColumn(db *sql.DB, tableName, columnName, ddl string) error {
+	cols, err := classicTableColumns(db, tableName)
+	if err != nil {
+		return err
+	}
+	if slices.Contains(cols, columnName) {
 		return nil
 	}
-	msg := strings.ToLower(err.Error())
-	if strings.Contains(msg, "duplicate column") || strings.Contains(msg, "already exists") {
-		return nil
-	}
+
+	_, err = db.Exec(ddl)
 	return err
+}
+
+func classicTableColumns(db *sql.DB, tableName string) ([]string, error) {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", tableName))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var cols []string
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notNull int
+		var defaultValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &ctype, &notNull, &defaultValue, &pk); err != nil {
+			return nil, err
+		}
+		cols = append(cols, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return cols, nil
 }
 
 func classicNormalize(s string) string {
@@ -264,6 +294,39 @@ func ClassicAddQA(q, a string) (int64, error) {
 	return res.LastInsertId()
 }
 
+func ClassicUpdateQA(id int64, q, a string) (bool, error) {
+	if err := classicInit(); err != nil {
+		return false, err
+	}
+	if id <= 0 {
+		return false, fmt.Errorf("invalid id")
+	}
+
+	q = strings.TrimSpace(q)
+	a = strings.TrimSpace(a)
+	if q == "" || a == "" {
+		return false, fmt.Errorf("empty q/a")
+	}
+
+	qn := classicNormalize(q)
+	if qn == "" {
+		return false, fmt.Errorf("empty normalized q")
+	}
+
+	qt := classicJoinTokens(classicTokenize(q))
+	now := time.Now().Unix()
+
+	res, err := classicDB.Exec(
+		`UPDATE classic_qa SET q=?, a=?, q_norm=?, q_tokens=?, updated_at=? WHERE id=?`,
+		q, a, qn, qt, now, id,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
 func ClassicDeleteLast() (bool, error) {
 	if err := classicInit(); err != nil {
 		return false, err
@@ -399,7 +462,7 @@ func ClassicReplyText(q string) (string, error) {
 		return "", err
 	}
 	if hit != nil {
-		// 关键：经典版命中后直接回 teach 的原答案，不要再套随机前后缀
+		// 经典版命中后直接回 teach 的原答案，不再加随机前后缀。
 		return hit.A, nil
 	}
 
